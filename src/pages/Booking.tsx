@@ -160,9 +160,27 @@ export default function Booking() {
       const loadedRooms: MeetingRoom[] =
         roomsRes.ok && roomsRes.data ? roomsRes.data.items : [];
       setRooms(loadedRooms);
-      setRoomBookings({});
       if (loadedRooms.length > 0) {
         setSelectedRoomId(loadedRooms[0].id);
+      }
+      const start = new Date(weekDates[0]);
+      const end = new Date(weekDates[6]);
+      end.setHours(23, 59, 59, 999);
+      const bookingsRes = await bookingService.getMyBookings({
+        pageSize: 200,
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+      });
+      if (bookingsRes.ok && bookingsRes.data) {
+        const items = bookingsRes.data.items;
+        const grouped: Record<string, Booking[]> = {};
+        for (const b of items) {
+          if (!grouped[b.roomId]) grouped[b.roomId] = [];
+          grouped[b.roomId].push(b);
+        }
+        setRoomBookings(grouped);
+      } else {
+        setRoomBookings({});
       }
       setLoading(false);
     };
@@ -170,7 +188,28 @@ export default function Booking() {
   }, []);
 
   useEffect(() => {
-    setRoomBookings({});
+    const loadWeekBookings = async () => {
+      const start = new Date(weekDates[0]);
+      const end = new Date(weekDates[6]);
+      end.setHours(23, 59, 59, 999);
+      const bookingsRes = await bookingService.getMyBookings({
+        pageSize: 200,
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+      });
+      if (bookingsRes.ok && bookingsRes.data) {
+        const items = bookingsRes.data.items;
+        const grouped: Record<string, Booking[]> = {};
+        for (const b of items) {
+          if (!grouped[b.roomId]) grouped[b.roomId] = [];
+          grouped[b.roomId].push(b);
+        }
+        setRoomBookings(grouped);
+      } else {
+        setRoomBookings({});
+      }
+    };
+    loadWeekBookings();
   }, [weekOffset, rooms]);
 
   useEffect(() => {
@@ -756,7 +795,12 @@ export default function Booking() {
                 <Button
                   onClick={handleSubmit}
                   rightIcon={duration > 2 ? <FileCheck className="w-4 h-4" /> : <Check className="w-4 h-4" />}
-                  disabled={isCreditInsufficient || conflicts.length > 0 || checkingConflict}
+                  disabled={
+                    isCreditInsufficient ||
+                    // 有任意冲突（含设备冲突 + 时间冲突）时禁用提交
+                    conflicts.length > 0 ||
+                    checkingConflict
+                  }
                   title={
                     isCreditInsufficient
                       ? '您的信用分不足，暂不可预订'
@@ -871,6 +915,13 @@ export default function Booking() {
                     {DEVICE_OPTIONS.map((device) => {
                       const checked = formData.requiredDevices.includes(device.value);
                       const roomHas = formData.room?.equipmentIds.includes(device.value);
+                      const hasDeviceConflict = conflicts.some(
+                        (c) =>
+                          c.type === 'device' &&
+                          (c.deviceId === device.value ||
+                            c.deviceName === device.value ||
+                            c.deviceName === device.label),
+                      );
                       return (
                         <label
                           key={device.value}
@@ -903,7 +954,12 @@ export default function Booking() {
                             className="w-4 h-4 rounded border-brand-300 text-brand-500 focus:ring-brand-200"
                           />
                           <device.icon className="w-4 h-4 text-brand-500" />
-                          <span className="text-sm text-brand-700">{device.label}</span>
+                          <span className="text-sm text-brand-700 relative inline-flex items-center gap-1">
+                            {device.label}
+                            {hasDeviceConflict && (
+                              <span className="inline-block w-2 h-2 rounded-full bg-danger-500 shrink-0" title="该设备存在冲突" />
+                            )}
+                          </span>
                           {!roomHas && (
                             <span className="ml-auto text-[10px] text-warning-600 bg-warning-50 px-1.5 py-0.5 rounded">
                               无此设备
@@ -1002,27 +1058,19 @@ export default function Booking() {
                   <div className="space-y-2">
                     {conflicts.map((c, idx) => {
                       if (c.type === 'device') {
-                        const deviceLabel =
-                          DEVICE_OPTIONS.find((d) => d.value === c.deviceName)?.label ||
-                          c.deviceName ||
-                          (c as any).deviceId ||
-                          '未知';
-                        const conflictTimeRaw =
-                          (c as any).conflictTime || (c as any).startTime || c.conflictingBookingId
-                            ? Object.values(roomBookings)
-                                .flat()
-                                .find((b) => b.id === c.conflictingBookingId)?.startTime
-                            : null;
-                        const conflictTimeStr = conflictTimeRaw
-                          ? formatTime(conflictTimeRaw)
-                          : '该时段';
                         return (
                           <div
                             key={`device-${idx}`}
-                            className="rounded-xl border border-orange-200 bg-orange-50 p-3"
+                            className="rounded-xl border border-orange-200 bg-orange-50 p-3 space-y-1"
                           >
                             <p className="text-sm font-medium text-orange-700">
-                              ⚠️ 设备「{deviceLabel}」已在 {conflictTimeStr} 被占用，请更换设备或调整时间
+                              🟠 设备「{c.deviceName || c.deviceId || '未知'}」已被占用
+                            </p>
+                            <p className="text-xs text-orange-600">
+                              占用时段：{c.startTime ? formatTime(c.startTime) : '--:--'} - {c.endTime ? formatTime(c.endTime) : '--:--'}
+                            </p>
+                            <p className="text-xs text-orange-600">
+                              建议：更换此设备或调整会议时间
                             </p>
                           </div>
                         );
@@ -1030,10 +1078,13 @@ export default function Booking() {
                       return (
                         <div
                           key={`time-${idx}`}
-                          className="rounded-xl border border-danger-200 bg-danger-50 p-3"
+                          className="rounded-xl border border-danger-200 bg-danger-50 p-3 space-y-1"
                         >
                           <p className="text-sm font-medium text-danger-700">
-                            🕐 会议室「{c.roomName || formData.room?.name || ''}」与现有会议时间冲突
+                            � 会议室「{c.roomName || formData.room?.name || ''}」时间冲突
+                          </p>
+                          <p className="text-xs text-danger-600">
+                            冲突时段：{c.startTime ? formatTime(c.startTime) : '--:--'} - {c.endTime ? formatTime(c.endTime) : '--:--'}
                           </p>
                         </div>
                       );

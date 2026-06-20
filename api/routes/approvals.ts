@@ -10,9 +10,37 @@ router.use(authMiddleware, requireManager);
 
 router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { mine } = req.query;
+    const { mine, page, pageSize } = req.query;
     const managerId = mine === 'true' ? req.user!.id : undefined;
-    const result = bookingService.findPendingApprovals(managerId);
+    const p = page ? Number(page) : 1;
+    const ps = pageSize ? Number(pageSize) : 20;
+    const result = bookingService.findPendingApprovals(managerId, p, ps);
+    res.json({ code: 200, message: '获取成功', data: result } as ApiResponse<typeof result>);
+  } catch (error) {
+    res.status(500).json({ code: 500, message: '服务器错误', data: null } as ApiResponse<null>);
+  }
+});
+
+router.get('/pending', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { mine, page, pageSize } = req.query;
+    const managerId = mine === 'true' ? req.user!.id : undefined;
+    const p = page ? Number(page) : 1;
+    const ps = pageSize ? Number(pageSize) : 20;
+    const result = bookingService.findPendingApprovals(managerId, p, ps);
+    res.json({ code: 200, message: '获取成功', data: result } as ApiResponse<typeof result>);
+  } catch (error) {
+    res.status(500).json({ code: 500, message: '服务器错误', data: null } as ApiResponse<null>);
+  }
+});
+
+router.get('/history', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { page, pageSize } = req.query;
+    const managerId = req.user!.id;
+    const p = page ? Number(page) : 1;
+    const ps = pageSize ? Number(pageSize) : 20;
+    const result = bookingService.findApprovalHistory(managerId, p, ps);
     res.json({ code: 200, message: '获取成功', data: result } as ApiResponse<typeof result>);
   } catch (error) {
     res.status(500).json({ code: 500, message: '服务器错误', data: null } as ApiResponse<null>);

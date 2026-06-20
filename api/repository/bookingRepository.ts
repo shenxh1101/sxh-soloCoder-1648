@@ -173,12 +173,15 @@ class BookingRepository extends BaseRepository<Booking> {
   }
 
   approve(bookingId: string, managerId: string, comment?: string): Booking | null {
-    return this.update(bookingId, {
+    const updateData: UpdateBookingInput = {
       status: 'locked',
       approvalManagerId: managerId,
       approvalTime: new Date().toISOString(),
-      approvalComment: comment || '批准',
-    } as UpdateBookingInput);
+    };
+    if (comment !== undefined && comment !== null && comment !== '') {
+      updateData.approvalComment = comment;
+    }
+    return this.update(bookingId, updateData);
   }
 
   reject(bookingId: string, managerId: string, comment: string): Booking | null {

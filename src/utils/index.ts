@@ -61,7 +61,7 @@ export function bookingStatusLabel(status: BookingStatus): string {
     completed: '已完成',
     released: '已释放',
     cancelled: '已取消',
-    rejected: '已拒绝',
+    rejected: '已驳回',
   };
   return map[status];
 }

@@ -54,6 +54,7 @@ export interface BookingWithRelations extends Booking {
   room?: MeetingRoom;
   user?: User;
   devices?: Device[];
+  approvalManagerName?: string;
 }
 
 export interface WorkOrderWithRelations extends WorkOrder {

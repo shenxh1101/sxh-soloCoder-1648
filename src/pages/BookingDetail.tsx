@@ -239,6 +239,7 @@ export default function BookingDetail() {
     if (result.ok) {
       addToast({ type: 'success', message: '签到成功！' });
       await reloadBooking();
+      setTimeout(() => reloadBooking(), 300);
     } else {
       addToast({ type: 'error', message: result.message || '签到失败，请稍后重试' });
     }
@@ -253,6 +254,7 @@ export default function BookingDetail() {
     if (result.ok) {
       addToast({ type: 'success', message: '预订已取消' });
       await reloadBooking();
+      setTimeout(() => reloadBooking(), 300);
     } else {
       addToast({ type: 'error', message: result.message || '取消失败，请稍后重试' });
     }
@@ -261,6 +263,7 @@ export default function BookingDetail() {
 
   const handleRefresh = async () => {
     await reloadBooking();
+    setTimeout(() => reloadBooking(), 300);
     addToast({ type: 'info', message: '状态已刷新' });
   };
 
@@ -493,22 +496,97 @@ export default function BookingDetail() {
                 </div>
               )}
 
-              {booking.approvalManagerName && (
-                <div className="flex items-start gap-4 p-4 bg-brand-50/60 rounded-2xl">
-                  <div className="p-2.5 bg-white rounded-xl shadow-sm">
-                    <UserCheck className="h-5 w-5 text-success-500" />
-                  </div>
-                  <div>
-                    <div className="text-xs text-brand-500 mb-1">审批人</div>
-                    <div className="font-medium text-brand-800 text-sm">
-                      {booking.approvalManagerName}
-                    </div>
-                    {booking.approvalTime && (
-                      <div className="text-xs text-brand-500 mt-0.5">
-                        {formatDateTime(booking.approvalTime)}
+              {(booking.status === 'pending_approval' ||
+                booking.status === 'locked' ||
+                booking.status === 'completed' ||
+                booking.status === 'rejected' ||
+                booking.approvalManagerName) && (
+                <div className="sm:col-span-2 flex flex-col gap-3">
+                  {booking.status === 'pending_approval' && booking.approvalManagerName && (
+                    <div className="flex items-start gap-4 p-4 bg-warning-50/80 border border-warning-100 rounded-2xl">
+                      <div className="p-2.5 bg-white rounded-xl shadow-sm">
+                        <Clock className="h-5 w-5 text-warning-500" />
                       </div>
-                    )}
-                  </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <Badge variant="warning">等待审批</Badge>
+                        </div>
+                        <div className="font-medium text-brand-800 text-sm">
+                          等待主管 <span className="text-warning-700 font-semibold">{booking.approvalManagerName}</span> 审批
+                        </div>
+                        <div className="text-xs text-brand-500 mt-0.5">
+                          审批通过后会议室即可锁定使用
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {(booking.status === 'locked' || booking.status === 'completed') && booking.approvalManagerName && (
+                    <div className="flex items-start gap-4 p-4 bg-success-50/80 border border-success-100 rounded-2xl">
+                      <div className="p-2.5 bg-white rounded-xl shadow-sm">
+                        <UserCheck className="h-5 w-5 text-success-500" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <Badge variant="success">审批通过</Badge>
+                        </div>
+                        <div className="font-medium text-brand-800 text-sm">
+                          <span className="text-success-700 font-semibold">{booking.approvalManagerName}</span>
+                          {booking.approvalTime && (
+                            <span className="text-brand-500 ml-2">· {formatDateTime(booking.approvalTime)}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {booking.status === 'rejected' && booking.approvalManagerName && (
+                    <div className="flex items-start gap-4 p-4 bg-danger-50/80 border border-danger-100 rounded-2xl">
+                      <div className="p-2.5 bg-white rounded-xl shadow-sm">
+                        <XCircle className="h-5 w-5 text-danger-500" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <Badge variant="danger">已驳回</Badge>
+                        </div>
+                        <div className="font-medium text-brand-800 text-sm">
+                          <span className="text-danger-700 font-semibold">{booking.approvalManagerName}</span>
+                          {booking.approvalTime && (
+                            <span className="text-brand-500 ml-2">· {formatDateTime(booking.approvalTime)}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {booking.approvalComment && booking.status !== 'pending_approval' && (
+                    <div
+                      className={cn(
+                        'ml-2 rounded-xl border-l-4 p-4',
+                        booking.status === 'rejected'
+                          ? 'bg-danger-50 border-danger-400'
+                          : 'bg-brand-50 border-brand-400',
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          'text-xs font-semibold mb-1.5 flex items-center gap-1.5',
+                          booking.status === 'rejected' ? 'text-danger-600' : 'text-brand-600',
+                        )}
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        审批意见
+                      </div>
+                      <div
+                        className={cn(
+                          'text-sm leading-relaxed',
+                          booking.status === 'rejected' ? 'text-danger-800' : 'text-brand-800',
+                        )}
+                      >
+                        {booking.approvalComment}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

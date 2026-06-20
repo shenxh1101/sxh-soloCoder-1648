@@ -68,7 +68,7 @@ export default function App() {
           }
         />
         <Route
-          path="/booking/:id"
+          path="/bookings/:id"
           element={
             <ProtectedRoute roles={['employee', 'manager', 'admin']}>
               <BookingDetail />

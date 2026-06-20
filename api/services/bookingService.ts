@@ -358,9 +358,33 @@ class BookingService {
     return enriched;
   }
 
-  findPendingApprovals(managerId?: string): BookingWithRelations[] {
-    const bookings = bookingRepository.findPendingApprovals(managerId);
-    return bookings.map((b) => this.enrichBooking(b));
+  findPendingApprovals(managerId?: string, page = 1, pageSize = 20): PaginationResult<BookingWithRelations> {
+    let where = "status = 'pending_approval'";
+    const whereParams: unknown[] = [];
+    if (managerId) {
+      where += ' AND approvalManagerId = ?';
+      whereParams.push(managerId);
+    }
+    const result = bookingRepository.paginate(
+      { page, pageSize },
+      { where, whereParams, orderBy: 'startTime ASC' },
+    );
+    return {
+      ...result,
+      items: result.items.map((b) => this.enrichBooking(b)),
+    };
+  }
+
+  findApprovalHistory(managerId: string, page = 1, pageSize = 20): PaginationResult<BookingWithRelations> {
+    const where = "approvalManagerId = ? AND status IN ('locked','rejected','completed','cancelled')";
+    const result = bookingRepository.paginate(
+      { page, pageSize },
+      { where, whereParams: [managerId], orderBy: 'approvalTime DESC' },
+    );
+    return {
+      ...result,
+      items: result.items.map((b) => this.enrichBooking(b)),
+    };
   }
 
   findUpcomingBookings(minutesAhead: number = 30): BookingWithRelations[] {
@@ -395,6 +419,9 @@ class BookingService {
   private enrichBooking(booking: Booking): BookingWithRelations {
     const room = roomRepository.findById(booking.roomId);
     const user = userRepository.findById(booking.userId);
+    const approvalManager = booking.approvalManagerId
+      ? userRepository.findById(booking.approvalManagerId)
+      : undefined;
     const devices: Device[] = [];
     (booking.requiredDeviceIds || []).forEach((did) => {
       const d = deviceRepository.findById(did);
@@ -406,6 +433,7 @@ class BookingService {
       room: room || undefined,
       user: user ? (userRepository.toUser(user) as User) : undefined,
       devices,
+      approvalManagerName: approvalManager ? approvalManager.name : undefined,
     };
   }
 }

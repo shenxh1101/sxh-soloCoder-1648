@@ -139,6 +139,9 @@ export interface BookingConflict {
   conflictingBookingId?: string;
   roomName?: string;
   deviceName?: string;
+  deviceId?: string;
+  startTime?: string;
+  endTime?: string;
   suggestedAlternatives?: {
     roomId: string;
     roomName: string;

@@ -60,8 +60,8 @@ const statusColorMap: Record<BookingStatus, string> = {
 
 const statusBadgeVariant: Record<BookingStatus, 'success' | 'default' | 'danger' | 'warning' | 'info'> = {
   locked: 'info',
-  completed: 'default',
-  released: 'danger',
+  completed: 'success',
+  released: 'default',
   pending_approval: 'warning',
   cancelled: 'default',
   rejected: 'danger',
@@ -436,7 +436,8 @@ export default function Dashboard() {
                       return (
                         <div
                           key={booking.id}
-                          className="relative pl-12 group"
+                          className="relative pl-12 group cursor-pointer"
+                          onClick={() => navigate(`/bookings/${booking.id}`)}
                         >
                           <div
                             className={cn(
@@ -488,7 +489,10 @@ export default function Dashboard() {
                                   <Button
                                     size="sm"
                                     leftIcon={<HandPlatter className="w-4 h-4" />}
-                                    onClick={() => handleCheckIn(booking.id)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleCheckIn(booking.id);
+                                    }}
                                   >
                                     签到
                                   </Button>
@@ -498,7 +502,10 @@ export default function Dashboard() {
                                     size="sm"
                                     variant="secondary"
                                     leftIcon={<XCircle className="w-4 h-4" />}
-                                    onClick={() => handleCancel(booking.id)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleCancel(booking.id);
+                                    }}
                                   >
                                     取消
                                   </Button>
@@ -507,6 +514,10 @@ export default function Dashboard() {
                                   size="sm"
                                   variant="secondary"
                                   leftIcon={<Eye className="w-4 h-4" />}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate(`/bookings/${booking.id}`);
+                                  }}
                                 >
                                   详情
                                 </Button>

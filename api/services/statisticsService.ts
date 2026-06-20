@@ -84,7 +84,7 @@ class StatisticsService {
     const completedBookings = bookings.filter((b) => b.status === 'completed');
     const releasedBookings = bookings.filter((b) => b.status === 'released');
     const timeoutCount = bookingRepository.count(
-      "createdAt >= ? AND createdAt <= ? AND status = 'released'",
+      "updatedAt >= ? AND updatedAt <= ? AND status = 'released'",
       [startOfDay.toISOString(), endOfDay.toISOString()],
     );
     const totalRooms = rooms.length;
@@ -148,7 +148,7 @@ class StatisticsService {
       const endOfDay = this.getEndOfDay(d);
       const dateStr = startOfDay.toISOString().split('T')[0];
       const count = bookingRepository.count(
-        "status = 'released' AND createdAt >= ? AND createdAt <= ?",
+        "status = 'released' AND updatedAt >= ? AND updatedAt <= ?",
         [startOfDay.toISOString(), endOfDay.toISOString()],
       );
       result.push({ date: dateStr, count });

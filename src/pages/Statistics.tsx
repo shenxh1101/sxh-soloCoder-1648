@@ -395,22 +395,26 @@ export default function Statistics() {
     generateHeatmapDataMock(defaultRooms),
   );
   const [barData, setBarData] = useState<BarItem[]>(() => generateBarDataMock(defaultRooms));
-  const [timeoutTrendData, setTimeoutTrendData] = useState<TimeoutTrendItem[]>(() =>
-    generateTimeoutTrendDataMock(),
-  );
-  const [departmentData, setDepartmentData] = useState<DepartmentItem[]>(() =>
-    generateDepartmentDataMock(),
-  );
-  const [topTimeoutRooms, setTopTimeoutRooms] = useState<TopTimeoutRoom[]>(() =>
-    generateTopTimeoutRoomsMock(defaultRooms),
-  );
+  const [timeoutTrendData, setTimeoutTrendData] = useState<TimeoutTrendItem[]>(() => {
+    const today = new Date();
+    return [{ date: `${today.getMonth() + 1}/${today.getDate()}`, count: 0 }];
+  });
+  const [departmentData, setDepartmentData] = useState<DepartmentItem[]>([]);
+  const [topTimeoutRooms, setTopTimeoutRooms] = useState<TopTimeoutRoom[]>([]);
   const [faultPieData, setFaultPieData] = useState<FaultPieItem[]>(() =>
     generateFaultPieDataMock(),
   );
   const [faultRankData, setFaultRankData] = useState<FaultRankItem[]>(() =>
     generateFaultRankDataMock(),
   );
-  const [briefData, setBriefData] = useState<BriefData>(() => generateBriefDataMock(briefDate));
+  const [briefData, setBriefData] = useState<BriefData>(() => ({
+    date: briefDate,
+    totalBookings: 0,
+    completionRate: 0,
+    avgUsageRate: 0,
+    timeoutCount: 0,
+    faultCount: 0,
+  }));
   const [historyBriefs, setHistoryBriefs] = useState<HistoryBriefItem[]>(() =>
     generateHistoryBriefsMock(briefDate),
   );
@@ -471,11 +475,15 @@ export default function Statistics() {
     ]);
 
     const trendData = trendResult.ok && trendResult.data ? trendResult.data : [];
-    const mappedTrend: TimeoutTrendItem[] =
+    let mappedTrend: TimeoutTrendItem[] =
       trendData.map((t) => {
         const d = new Date(t.date);
         return { date: `${d.getMonth() + 1}/${d.getDate()}`, count: t.count };
       });
+    if (mappedTrend.length === 0) {
+      const today = new Date();
+      mappedTrend = [{ date: `${today.getMonth() + 1}/${today.getDate()}`, count: 0 }];
+    }
     setTimeoutTrendData(mappedTrend);
 
     const deptData = deptResult.ok && deptResult.data ? deptResult.data : [];
