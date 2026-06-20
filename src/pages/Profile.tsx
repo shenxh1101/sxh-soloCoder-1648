@@ -16,13 +16,18 @@ import {
   CheckCheck,
   ArrowUpRight,
   ArrowDownRight,
+  Edit3,
+  Save,
+  X,
 } from 'lucide-react';
 import Card, { CardHeader, CardTitle, CardContent } from '@/components/common/Card';
 import Button from '@/components/common/Button';
 import Badge from '@/components/common/Badge';
-import { useAppStore } from '@/store';
+import FormInput from '@/components/common/FormInput';
+import { useAuth, useUi } from '@/store';
 import { roleLabel, formatDateTime } from '@/utils';
 import { cn } from '@/utils';
+import { MIN_CREDIT_SCORE } from '../../shared';
 
 type ProfileTab = 'credit' | 'message' | 'log';
 
@@ -217,7 +222,10 @@ function getCreditLevel(score: number) {
 export default function Profile() {
   const [activeTab, setActiveTab] = useState<ProfileTab>('credit');
   const [messages, setMessages] = useState(generateMessages);
-  const { user, addToast } = useAppStore();
+  const { user, setUser } = useAuth();
+  const { addToast } = useUi();
+  const [isEditingCredit, setIsEditingCredit] = useState(false);
+  const [editCreditScore, setEditCreditScore] = useState(0);
 
   const creditRecords = useMemo(() => generateCreditRecords(), []);
   const operationLogs = useMemo(() => generateOperationLogs(), []);
@@ -233,7 +241,48 @@ export default function Profile() {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, isRead: true } : m)));
   };
 
+  const handleStartEditCredit = () => {
+    if (user) {
+      setEditCreditScore(user.creditScore);
+      setIsEditingCredit(true);
+    }
+  };
+
+  const handleSaveCredit = async () => {
+    if (editCreditScore < 0 || editCreditScore > 100) {
+      addToast({ type: 'warning', message: '信用分必须在 0-100 之间' });
+      return;
+    }
+    try {
+      const updatedUser = { ...user!, creditScore: editCreditScore };
+      setUser(updatedUser);
+      addToast({ type: 'success', message: `信用分已更新为 ${editCreditScore} 分` });
+      setIsEditingCredit(false);
+    } catch {
+      addToast({ type: 'error', message: '更新信用分失败' });
+    }
+  };
+
+  const handleCancelEditCredit = () => {
+    setIsEditingCredit(false);
+  };
+
   const creditLevel = user ? getCreditLevel(user.creditScore) : null;
+
+  const updateCreditScore = (newScore: number) => {
+    if (!user) return;
+    setUser({ ...user, creditScore: newScore });
+  };
+
+  const handleCreditAdjust = (delta: number) => {
+    if (!user) return;
+    const newScore = Math.max(0, Math.min(100, user.creditScore + delta));
+    updateCreditScore(newScore);
+    addToast({
+      type: delta > 0 ? 'success' : 'warning',
+      message: `信用分已${delta > 0 ? '增加' : '扣除'}${Math.abs(delta)}分，当前${newScore}分${newScore < MIN_CREDIT_SCORE ? '（已低于60分，不可预订）' : ''}`,
+    });
+  };
 
   const avatarColors = ['#2E5FA6', '#4D80C2', '#7FA8D8', '#B5D0EA'];
 
@@ -308,10 +357,104 @@ export default function Profile() {
                     <Gauge className={'h-4 w-4 ' + creditLevel.color} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-xs text-brand-500">信用等级</div>
-                    <div className={'text-sm font-semibold ' + creditLevel.color}>
-                      {creditLevel.level + '（' + user?.creditScore + '分）'}
+                    {!isEditingCredit ? (
+                      <>
+                        <div className="text-xs text-brand-500">信用等级</div>
+                        <div className={'text-sm font-semibold ' + creditLevel.color}>
+                          {creditLevel.level + '（' + user?.creditScore + '分）'}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="text-xs text-brand-500">编辑信用分（管理员）</div>
+                        <div className="flex items-center gap-2">
+                          <FormInput
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={editCreditScore}
+                            onChange={(e) => setEditCreditScore(parseInt(e.target.value) || 0)}
+                            className="!py-1 !px-2 !text-sm"
+                          />
+                          <span className="text-xs text-brand-600">分</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {user?.role === 'admin' && !isEditingCredit && (
+                    <button
+                      onClick={handleStartEditCredit}
+                      className="p-1.5 rounded-lg bg-white/80 hover:bg-white text-brand-500 hover:text-brand-700 transition-colors"
+                      title="编辑信用分（管理员）"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+                  )}
+                  {isEditingCredit && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={handleSaveCredit}
+                        className="p-1.5 rounded-lg bg-success-500 hover:bg-success-600 text-white transition-colors"
+                        title="保存"
+                      >
+                        <Save className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={handleCancelEditCredit}
+                        className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
+                        title="取消"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
                     </div>
+                  )}
+                </div>
+              )}
+
+              {user?.role === 'admin' && (
+                <div className="rounded-xl border border-dashed border-brand-200 bg-brand-50/50 p-3 space-y-2">
+                  <div className="text-xs font-semibold text-brand-700 flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    管理员快捷调整
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleCreditAdjust(-5)}
+                    >
+                      -5
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleCreditAdjust(-10)}
+                    >
+                      -10
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleCreditAdjust(5)}
+                    >
+                      +5
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleCreditAdjust(10)}
+                    >
+                      +10
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        updateCreditScore(95);
+                        addToast({ type: 'success', message: '信用分已重置为95分' });
+                      }}
+                    >
+                      重置
+                    </Button>
                   </div>
                 </div>
               )}
@@ -380,11 +523,39 @@ export default function Profile() {
         {activeTab === 'credit' && user && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card>
-              <CardHeader>
+              <CardHeader className="flex items-center justify-between">
                 <CardTitle className="text-base">信用分概览</CardTitle>
+                {user?.role === 'admin' && (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => handleCreditAdjust(-5)}
+                      title="测试：扣除5分信用分"
+                    >
+                      <ArrowDownRight className="w-4 h-4 mr-1" />
+                      -5
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={() => handleCreditAdjust(5)}
+                      title="测试：增加5分信用分"
+                      className="from-success-500 to-success-600 hover:from-success-600 hover:to-success-700 focus:ring-success-200"
+                    >
+                      <ArrowUpRight className="w-4 h-4 mr-1" />
+                      +5
+                    </Button>
+                  </div>
+                )}
               </CardHeader>
               <CardContent>
                 <CreditGauge value={user.creditScore} />
+                {user?.role === 'admin' && (
+                  <div className="mt-4 text-xs text-center text-brand-400 bg-brand-50/50 rounded-lg py-2 px-3">
+                    管理员测试模式：点击上方按钮调整信用分，实时观察 Booking/Dashboard 按钮状态变化
+                  </div>
+                )}
               </CardContent>
             </Card>
 

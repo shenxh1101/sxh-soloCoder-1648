@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ChevronRight,
@@ -25,6 +25,7 @@ import Card, { CardHeader, CardTitle, CardContent } from '@/components/common/Ca
 import Button from '@/components/common/Button';
 import Badge from '@/components/common/Badge';
 import { useAppStore } from '@/store';
+import { bookingService } from '@/services/bookingService';
 import {
   bookingStatusLabel,
   formatDate,
@@ -33,7 +34,7 @@ import {
   getDurationHours,
 } from '@/utils';
 import { cn } from '@/utils';
-import type { BookingStatus } from '@/types';
+import type { BookingStatus, Booking } from '@/types';
 
 const mockBooking = {
   id: 'BK20260620001',
@@ -174,19 +175,60 @@ export default function BookingDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { addToast } = useAppStore();
+  const [booking, setBooking] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    if (!id) {
+      setLoading(false);
+      return;
+    }
+    const loadBooking = async () => {
+      try {
+        setLoading(true);
+        const result = await bookingService.getBooking(id);
+        if (result) {
+          const enrichedBooking = {
+            ...result,
+            roomName: (result as any).roomName || mockBooking.roomName,
+            floor: (result as any).floor || mockBooking.floor,
+            capacity: (result as any).capacity || mockBooking.capacity,
+            userName: (result as any).userName || mockBooking.userName,
+            approvalManagerName: (result as any).approvalManagerName || mockBooking.approvalManagerName,
+            requiredDevices: (result as any).requiredDevices || result.requiredDeviceIds?.map((did: string, idx: number) => ({
+              id: did,
+              name: mockBooking.requiredDevices[idx % mockBooking.requiredDevices.length]?.name || did,
+            })) || mockBooking.requiredDevices,
+            startTime: new Date(result.startTime),
+            endTime: new Date(result.endTime),
+            createdAt: result.createdAt ? new Date(result.createdAt) : mockBooking.createdAt,
+            approvalTime: result.approvalTime ? new Date(result.approvalTime) : mockBooking.approvalTime,
+          };
+          setBooking(enrichedBooking);
+        } else {
+          setBooking(null);
+        }
+      } catch {
+        setBooking(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadBooking();
+  }, [id]);
+
+  const displayBooking = booking || mockBooking;
   const bookingId = id || mockBooking.id;
-  const booking = useMemo(() => mockBooking, []);
 
-  const duration = getDurationHours(booking.startTime, booking.endTime);
+  const duration = getDurationHours(displayBooking.startTime, displayBooking.endTime);
 
   const now = new Date();
   const canCheckIn =
-    booking.status === 'locked' &&
-    now >= new Date(booking.startTime.getTime() - 1000 * 60 * 15) &&
-    now <= booking.startTime;
+    displayBooking.status === 'locked' &&
+    now >= new Date(displayBooking.startTime.getTime() - 1000 * 60 * 15) &&
+    now <= displayBooking.startTime;
 
-  const canCancel = booking.status === 'locked' || booking.status === 'pending_approval';
+  const canCancel = displayBooking.status === 'locked' || displayBooking.status === 'pending_approval';
 
   const handleCheckIn = () => {
     addToast({ type: 'success', message: '签到成功！祝您会议顺利' });
@@ -207,7 +249,7 @@ export default function BookingDetail() {
   };
 
   const isSameDay =
-    formatDate(booking.startTime) === formatDate(booking.endTime);
+    formatDate(displayBooking.startTime) === formatDate(displayBooking.endTime);
 
   return (
     <div className="space-y-6 print:space-y-4">
@@ -241,21 +283,21 @@ export default function BookingDetail() {
               <div
                 className={cn(
                   'inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-white text-sm font-semibold shadow-lg bg-gradient-to-r',
-                  statusGradient[booking.status],
+                  statusGradient[displayBooking.status],
                 )}
               >
-                {booking.status === 'locked' && <MapPinned className="h-4 w-4" />}
-                {booking.status === 'pending_approval' && <Clock className="h-4 w-4" />}
-                {booking.status === 'completed' && <CheckCircle className="h-4 w-4" />}
-                {(booking.status === 'released' || booking.status === 'cancelled' || booking.status === 'rejected') && (
+                {displayBooking.status === 'locked' && <MapPinned className="h-4 w-4" />}
+                {displayBooking.status === 'pending_approval' && <Clock className="h-4 w-4" />}
+                {displayBooking.status === 'completed' && <CheckCircle className="h-4 w-4" />}
+                {(displayBooking.status === 'released' || displayBooking.status === 'cancelled' || displayBooking.status === 'rejected') && (
                   <XCircle className="h-4 w-4" />
                 )}
-                {bookingStatusLabel(booking.status)}
+                {bookingStatusLabel(displayBooking.status)}
               </div>
             </div>
 
             <h1 className="text-2xl font-bold text-brand-800 mb-2 leading-tight">
-              {booking.title}
+              {displayBooking.title}
             </h1>
             <div className="flex items-center gap-2 text-sm text-brand-500 mb-8 flex-wrap">
               <span className="inline-flex items-center gap-1.5">
@@ -265,7 +307,7 @@ export default function BookingDetail() {
               <span className="w-1 h-1 rounded-full bg-brand-300" />
               <span className="inline-flex items-center gap-1.5">
                 <UserCircle className="h-3.5 w-3.5" />
-                预订人：{booking.userName}
+                预订人：{displayBooking.userName}
               </span>
             </div>
 
@@ -276,10 +318,10 @@ export default function BookingDetail() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-xs text-brand-500 mb-1">会议室</div>
-                  <div className="font-semibold text-brand-800">{booking.roomName}</div>
+                  <div className="font-semibold text-brand-800">{displayBooking.roomName}</div>
                   <div className="text-sm text-brand-600 mt-0.5 flex items-center gap-1.5">
                     <Building className="h-3 w-3" />
-                    {booking.floor}
+                    {displayBooking.floor}
                   </div>
                 </div>
               </div>
@@ -290,9 +332,9 @@ export default function BookingDetail() {
                 </div>
                 <div>
                   <div className="text-xs text-brand-500 mb-1">容量</div>
-                  <div className="font-semibold text-brand-800">{booking.capacity} 人</div>
+                  <div className="font-semibold text-brand-800">{displayBooking.capacity} 人</div>
                   <div className="text-sm text-brand-600 mt-0.5">
-                    参会：{booking.attendeeCount} 人
+                    参会：{displayBooking.attendeeCount} 人
                   </div>
                 </div>
               </div>
@@ -304,13 +346,13 @@ export default function BookingDetail() {
                 <div className="flex-1">
                   <div className="text-xs text-brand-500 mb-1">时间</div>
                   <div className="font-semibold text-brand-800">
-                    {formatDate(booking.startTime)}
-                    {!isSameDay && ` - ${formatDate(booking.endTime)}`}
+                    {formatDate(displayBooking.startTime)}
+                    {!isSameDay && ` - ${formatDate(displayBooking.endTime)}`}
                   </div>
                   <div className="text-sm text-brand-600 mt-0.5 flex items-center gap-3 flex-wrap">
                     <span className="inline-flex items-center gap-1.5">
                       <Clock className="h-3.5 w-3.5" />
-                      {formatTime(booking.startTime)} - {formatTime(booking.endTime)}
+                      {formatTime(displayBooking.startTime)} - {formatTime(displayBooking.endTime)}
                     </span>
                     <span className="inline-flex items-center gap-1.5 text-brand-700 font-medium">
                       <Timer className="h-3.5 w-3.5" />
@@ -327,7 +369,7 @@ export default function BookingDetail() {
                 <div className="flex-1 min-w-0">
                   <div className="text-xs text-brand-500 mb-2">所需设备</div>
                   <div className="flex flex-wrap gap-2">
-                    {booking.requiredDevices.map((d) => (
+                    {displayBooking.requiredDevices.map((d: any) => (
                       <span
                         key={d.id}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-brand-700 text-sm rounded-xl border border-brand-100 shadow-sm font-medium"
@@ -347,12 +389,12 @@ export default function BookingDetail() {
                 <div>
                   <div className="text-xs text-brand-500 mb-1">提交时间</div>
                   <div className="font-medium text-brand-800 text-sm">
-                    {formatDateTime(booking.createdAt)}
+                    {formatDateTime(displayBooking.createdAt)}
                   </div>
                 </div>
               </div>
 
-              {booking.approvalManagerName && (
+              {displayBooking.approvalManagerName && (
                 <div className="flex items-start gap-4 p-4 bg-brand-50/60 rounded-2xl">
                   <div className="p-2.5 bg-white rounded-xl shadow-sm">
                     <UserCheck className="h-5 w-5 text-success-500" />
@@ -360,11 +402,11 @@ export default function BookingDetail() {
                   <div>
                     <div className="text-xs text-brand-500 mb-1">审批人</div>
                     <div className="font-medium text-brand-800 text-sm">
-                      {booking.approvalManagerName}
+                      {displayBooking.approvalManagerName}
                     </div>
-                    {booking.approvalTime && (
+                    {displayBooking.approvalTime && (
                       <div className="text-xs text-brand-500 mt-0.5">
-                        {formatDateTime(booking.approvalTime)}
+                        {formatDateTime(displayBooking.approvalTime)}
                       </div>
                     )}
                   </div>
@@ -414,19 +456,19 @@ export default function BookingDetail() {
                 <div className="text-center">
                   <div className="text-xs text-brand-500 mb-0.5">日期</div>
                   <div className="text-sm font-semibold text-brand-800">
-                    {formatDate(booking.startTime).slice(5)}
+                    {formatDate(displayBooking.startTime).slice(5)}
                   </div>
                 </div>
                 <div className="text-center">
                   <div className="text-xs text-brand-500 mb-0.5">时间</div>
                   <div className="text-sm font-semibold text-brand-800">
-                    {formatTime(booking.startTime)}
+                    {formatTime(displayBooking.startTime)}
                   </div>
                 </div>
                 <div className="text-center">
                   <div className="text-xs text-brand-500 mb-0.5">会议室</div>
                   <div className="text-sm font-semibold text-brand-800">
-                    {booking.roomName}
+                    {displayBooking.roomName}
                   </div>
                 </div>
                 <div className="text-center">

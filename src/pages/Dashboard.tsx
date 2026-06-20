@@ -384,7 +384,14 @@ export default function Dashboard() {
                 variant="secondary"
                 size="lg"
                 leftIcon={<Plus className="w-5 h-5" />}
-                onClick={() => navigate('/booking')}
+                onClick={() => {
+                  if (user?.creditScore && user.creditScore < 60) {
+                    addToast({ type: 'warning', message: '信用分不足（低于60），暂不可预订，请联系管理员' });
+                    return;
+                  }
+                  navigate('/booking');
+                }}
+                disabled={user?.creditScore && user.creditScore < 60}
                 className="bg-white/20 hover:bg-white/30 text-white border-white/30 backdrop-blur-sm"
               >
                 立即预订
@@ -477,7 +484,17 @@ export default function Dashboard() {
                   <CalendarDays className="w-16 h-16 mx-auto mb-4 opacity-30" />
                   <p className="text-lg mb-2">暂无预订记录</p>
                   <p className="text-sm mb-6">点击上方按钮立即预订会议室</p>
-                  <Button leftIcon={<Plus className="w-4 h-4" />} onClick={() => navigate('/booking')}>
+                  <Button
+                    leftIcon={<Plus className="w-4 h-4" />}
+                    onClick={() => {
+                      if (user?.creditScore && user.creditScore < 60) {
+                        addToast({ type: 'warning', message: '信用分不足（低于60），暂不可预订，请联系管理员' });
+                        return;
+                      }
+                      navigate('/booking');
+                    }}
+                    disabled={user?.creditScore && user.creditScore < 60}
+                  >
                     立即预订
                   </Button>
                 </div>

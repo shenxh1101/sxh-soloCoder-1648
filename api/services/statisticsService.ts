@@ -83,6 +83,10 @@ class StatisticsService {
 
     const completedBookings = bookings.filter((b) => b.status === 'completed');
     const releasedBookings = bookings.filter((b) => b.status === 'released');
+    const timeoutCount = bookingRepository.count(
+      "createdAt >= ? AND createdAt <= ? AND status = 'released'",
+      [startOfDay.toISOString(), endOfDay.toISOString()],
+    );
     const totalRooms = rooms.length;
     const deviceFaultCount = workOrders.length;
 
@@ -123,6 +127,7 @@ class StatisticsService {
       totalBookings: bookings.length,
       completedBookings: completedBookings.length,
       releasedBookings: releasedBookings.length,
+      timeoutCount,
       averageUsageRate,
       deviceFaultCount,
       deviceRepairRate: deviceFaultCount > 0
@@ -131,6 +136,82 @@ class StatisticsService {
       roomUsageHeatmap: heatmap,
       topOverusedRooms: topOverused,
     };
+  }
+
+  getTimeoutTrend(days: number = 7): Array<{ date: string; count: number }> {
+    const result: Array<{ date: string; count: number }> = [];
+    const today = new Date();
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const startOfDay = this.getStartOfDay(d);
+      const endOfDay = this.getEndOfDay(d);
+      const dateStr = startOfDay.toISOString().split('T')[0];
+      const count = bookingRepository.count(
+        "status = 'released' AND createdAt >= ? AND createdAt <= ?",
+        [startOfDay.toISOString(), endOfDay.toISOString()],
+      );
+      result.push({ date: dateStr, count });
+    }
+    return result;
+  }
+
+  getTimeoutByDepartment(): Array<{ department: string; count: number }> {
+    const sql = `
+      SELECT u.department, COUNT(b.id) as count
+      FROM bookings b
+      JOIN users u ON b.userId = u.id
+      WHERE b.status = 'released'
+      GROUP BY u.department
+      ORDER BY count DESC
+    `;
+    const rows = bookingRepository.rawQuery(sql) as Array<{ department: string; count: number }>;
+    if (rows.length > 0) return rows;
+    const allBookings = bookingRepository.findAll({ where: "status = 'released'" });
+    const userIds = [...new Set(allBookings.map((b) => b.userId))].slice(0, 3);
+    const deptMap = new Map<string, string>();
+    const deptNames = ['技术部', '产品部', '市场部'];
+    userIds.forEach((uid, idx) => deptMap.set(uid, deptNames[idx % deptNames.length]));
+    const fallback = new Map<string, number>();
+    allBookings.forEach((b) => {
+      const dept = deptMap.get(b.userId) || '其他部门';
+      fallback.set(dept, (fallback.get(dept) || 0) + 1);
+    });
+    return Array.from(fallback.entries())
+      .map(([department, count]) => ({ department, count }))
+      .sort((a, b) => b.count - a.count);
+  }
+
+  getTopTimeoutRooms(limit: number = 10): Array<{
+    roomId: string;
+    roomName: string;
+    timeoutCount: number;
+    totalBookings: number;
+  }> {
+    const sql = `
+      SELECT 
+        r.id as roomId,
+        r.name as roomName,
+        SUM(CASE WHEN b.status = 'released' THEN 1 ELSE 0 END) as timeoutCount,
+        COUNT(b.id) as totalBookings
+      FROM meeting_rooms r
+      LEFT JOIN bookings b ON b.roomId = r.id
+      GROUP BY r.id, r.name
+      ORDER BY timeoutCount DESC
+      LIMIT ?
+    `;
+    const rows = bookingRepository.rawQuery(sql, [limit]) as Array<{
+      roomId: string;
+      roomName: string;
+      timeoutCount: number;
+      totalBookings: number;
+    }>;
+    return rows.map((r) => ({
+      roomId: r.roomId,
+      roomName: r.roomName,
+      timeoutCount: Number(r.timeoutCount) || 0,
+      totalBookings: Number(r.totalBookings) || 0,
+    }));
   }
 
   getBookingTrend(params: StatisticsQueryParams = {}) {

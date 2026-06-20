@@ -265,8 +265,8 @@ export default function Booking() {
   };
 
   const handleTimeSlotClick = (roomId: string, date: Date, slotIdx: number) => {
-    if (user && user.creditScore < MIN_CREDIT_SCORE) {
-      addToast({ type: 'warning', message: '您的信用分不足，暂不可预订' });
+    if (user?.creditScore && user.creditScore < MIN_CREDIT_SCORE) {
+      addToast({ type: 'warning', message: '信用分不足（低于60），暂不可预订，请联系管理员恢复' });
       return;
     }
     const room = rooms.find((r) => r.id === roomId);
@@ -307,17 +307,17 @@ export default function Booking() {
     return Object.keys(errors).length === 0;
   };
 
+  const hasDeviceConflicts = conflicts.some((c) => c.type === 'device');
+
   const validateStep2 = (): boolean => {
     const errors: Record<string, string> = {};
     if (!formData.title.trim()) errors.title = '请输入会议主题';
     if (conflicts.length > 0) {
       const hasTimeConflict = conflicts.some((c) => c.type === 'time');
-      const hasDeviceConflict = conflicts.some((c) => c.type === 'device');
-      if (hasTimeConflict && hasDeviceConflict) {
-        errors.conflict = '存在时间和设备冲突，请调整时间或设备';
-      } else if (hasDeviceConflict) {
-        errors.conflict = '存在设备冲突，请调整设备或时间';
-      } else {
+      if (hasDeviceConflicts) {
+        return false;
+      }
+      if (hasTimeConflict) {
         errors.conflict = '存在时间冲突，请调整时间';
       }
     }
@@ -350,29 +350,18 @@ export default function Booking() {
       if (result?.status === 'pending_approval') {
         addToast({
           type: 'warning',
-          message: '预订已提交审批，等待经理审核后生效',
+          message: '已提交主管审批，审批通过后生效',
           duration: 5000,
         });
-      } else {
-        addToast({ type: 'success', message: '预订成功！' });
+      } else if (result?.status === 'locked') {
+        addToast({ type: 'success', message: '预订成功，会议室已锁定' });
       }
       setBookingModalOpen(false);
       if (result?.id) {
         navigate(`/bookings/${result.id}`);
       }
     } catch {
-      const duration = getDurationHours(formData.startTime!, formData.endTime!);
-      if (duration > 2) {
-        addToast({
-          type: 'warning',
-          message: '预订已提交审批（Mock），等待经理审核后生效',
-          duration: 5000,
-        });
-      } else {
-        addToast({ type: 'success', message: '预订成功！（Mock）' });
-      }
-      setBookingModalOpen(false);
-      setRoomBookings(generateMockBookings(rooms, weekDates));
+      addToast({ type: 'error', message: '预订失败，请调整后重试' });
     } finally {
       setGlobalLoading(false);
     }
@@ -807,8 +796,8 @@ export default function Booking() {
                 <Button
                   onClick={handleSubmit}
                   rightIcon={duration > 2 ? <FileCheck className="w-4 h-4" /> : <Check className="w-4 h-4" />}
-                  disabled={isCreditInsufficient}
-                  title={isCreditInsufficient ? '您的信用分不足，暂不可预订' : undefined}
+                  disabled={isCreditInsufficient || hasDeviceConflicts}
+                  title={isCreditInsufficient ? '您的信用分不足，暂不可预订' : hasDeviceConflicts ? '存在设备冲突，请调整后再提交' : undefined}
                 >
                   {duration > 2 ? '提交审批' : '确认预订'}
                 </Button>
@@ -1060,6 +1049,12 @@ export default function Booking() {
                             const deviceLabel = DEVICE_OPTIONS.find(
                               (d) => d.value === c.deviceName,
                             )?.label;
+                            const conflictingBooking = c.conflictingBookingId
+                              ? Object.values(roomBookings).flat().find((b) => b.id === c.conflictingBookingId)
+                              : null;
+                            const conflictTime = conflictingBooking
+                              ? `${formatDate(conflictingBooking.startTime)} ${formatTime(conflictingBooking.startTime)}`
+                              : '该时段';
                             return (
                               <div key={`device-${idx}`}>
                                 <p className="text-sm font-medium text-danger-700">
@@ -1068,9 +1063,9 @@ export default function Booking() {
                                 <p className="text-xs text-danger-600 mt-0.5">
                                   设备
                                   <span className="font-medium">
-                                    {deviceLabel || c.deviceName || '未知设备'}
+                                    『{deviceLabel || c.deviceName || '未知设备'}』
                                   </span>
-                                  已被占用，请调整时间或更换设备
+                                  已在 {conflictTime} 被占用
                                 </p>
                               </div>
                             );

@@ -35,6 +35,23 @@ export interface TimeSlotUsage {
   rate: number;
 }
 
+export interface TimeoutTrendItem {
+  date: string;
+  count: number;
+}
+
+export interface DepartmentTimeoutItem {
+  department: string;
+  count: number;
+}
+
+export interface RoomTimeoutItem {
+  roomId: string;
+  roomName: string;
+  timeoutCount: number;
+  totalBookings: number;
+}
+
 export const statisticsService = {
   getOverview: () => api.get<StatisticsOverview>('/statistics/overview'),
 
@@ -67,6 +84,19 @@ export const statisticsService = {
     api.get<
       { department: string; bookingCount: number; avgAttendees: number }[]
     >('/statistics/departments', { params: { startDate, endDate } }),
+
+  getTimeoutTrend: (days?: number) =>
+    api.get<TimeoutTrendItem[]>('/statistics/timeout-trend', {
+      params: days !== undefined ? { days } : undefined,
+    }),
+
+  getTimeoutByDepartment: () =>
+    api.get<DepartmentTimeoutItem[]>('/statistics/timeout-by-department'),
+
+  getTopTimeoutRooms: (limit?: number) =>
+    api.get<RoomTimeoutItem[]>('/statistics/top-timeout-rooms', {
+      params: limit !== undefined ? { limit } : undefined,
+    }),
 };
 
 export default statisticsService;

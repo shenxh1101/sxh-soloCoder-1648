@@ -32,7 +32,14 @@ import Badge from '@/components/common/Badge';
 import { useAppStore } from '@/store';
 import { formatDate } from '@/utils';
 import { cn } from '@/utils';
-import { statisticsService, type RoomUsageStats, type DeviceFaultStats } from '@/services/statisticsService';
+import {
+  statisticsService,
+  type RoomUsageStats,
+  type DeviceFaultStats,
+  type TimeoutTrendItem as ApiTimeoutTrendItem,
+  type DepartmentTimeoutItem,
+  type RoomTimeoutItem,
+} from '@/services/statisticsService';
 import { roomService } from '@/services/roomService';
 import type { DailyReport, MeetingRoom } from '@/types';
 
@@ -310,12 +317,14 @@ function buildBriefData(report: DailyReport | undefined, date: string): BriefDat
     report.totalBookings > 0
       ? Math.round((report.completedBookings / report.totalBookings) * 1000) / 10
       : 0;
+  const timeoutCount =
+    (report as DailyReport & { timeoutCount?: number }).timeoutCount ?? report.releasedBookings;
   return {
     date,
     totalBookings: report.totalBookings,
     completionRate,
     avgUsageRate: report.averageUsageRate,
-    timeoutCount: report.releasedBookings,
+    timeoutCount,
     faultCount: report.deviceFaultCount,
   };
 }
@@ -463,6 +472,50 @@ export default function Statistics() {
   const loadTimeoutData = useCallback(async () => {
     setLoading((prev) => ({ ...prev, timeout: true }));
     try {
+      const results = await Promise.allSettled([
+        statisticsService.getTimeoutTrend(30),
+        statisticsService.getTimeoutByDepartment(),
+        statisticsService.getTopTimeoutRooms(10),
+      ]);
+
+      const trendResult: ApiTimeoutTrendItem[] =
+        results[0].status === 'fulfilled' && results[0].value ? results[0].value : [];
+      const deptResult: DepartmentTimeoutItem[] =
+        results[1].status === 'fulfilled' && results[1].value ? results[1].value : [];
+      const roomsResult: RoomTimeoutItem[] =
+        results[2].status === 'fulfilled' && results[2].value ? results[2].value : [];
+
+      const mappedTrend: TimeoutTrendItem[] =
+        trendResult.length > 0
+          ? trendResult.map((t) => {
+              const d = new Date(t.date);
+              return { date: `${d.getMonth() + 1}/${d.getDate()}`, count: t.count };
+            })
+          : generateTimeoutTrendDataMock();
+      setTimeoutTrendData(mappedTrend);
+
+      const mappedDept: DepartmentItem[] =
+        deptResult.length > 0
+          ? deptResult.map((d) => ({ name: d.department, count: d.count }))
+          : generateDepartmentDataMock();
+      setDepartmentData(mappedDept);
+
+      if (roomsResult.length > 0) {
+        const mappedRooms: TopTimeoutRoom[] = roomsResult
+          .sort((a, b) => b.timeoutCount - a.timeoutCount)
+          .slice(0, 10)
+          .map((r, i) => ({
+            rank: i + 1,
+            name: r.roomName,
+            count: r.timeoutCount,
+            avgDuration:
+              r.totalBookings > 0 ? Math.round((r.timeoutCount / r.totalBookings) * 20 * 10) / 10 : 0,
+          }));
+        setTopTimeoutRooms(mappedRooms);
+      } else {
+        setTopTimeoutRooms(generateTopTimeoutRoomsMock(rooms));
+      }
+    } catch {
       setTimeoutTrendData(generateTimeoutTrendDataMock());
       setDepartmentData(generateDepartmentDataMock());
       setTopTimeoutRooms(generateTopTimeoutRoomsMock(rooms));

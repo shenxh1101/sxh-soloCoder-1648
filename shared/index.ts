@@ -126,6 +126,7 @@ export interface DailyReport {
   totalBookings: number;
   completedBookings: number;
   releasedBookings: number;
+  timeoutCount: number;
   averageUsageRate: number;
   deviceFaultCount: number;
   deviceRepairRate: number;

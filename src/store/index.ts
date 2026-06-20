@@ -13,7 +13,8 @@ interface AuthSlice {
   token: string | null;
   login: (user: User, token: string) => void;
   logout: () => void;
-  setUser: (user: Partial<User>) => void;
+  setUser: (user: User | Partial<User>) => void;
+  updateCreditScore: (newScore: number) => void;
 }
 
 interface UiSlice {
@@ -53,10 +54,24 @@ const createAuthSlice = (): AuthSlice => ({
     localStorage.removeItem('user');
     useAppStore.setState({ user: null, token: null });
   },
-  setUser: (user) => {
-    useAppStore.setState((state) => ({
-      user: state.user ? { ...state.user, ...user } : state.user,
-    }));
+  setUser: (nextUser) => {
+    useAppStore.setState((state) => {
+      if (!state.user) return { user: state.user };
+      const isFullUpdate = 'id' in nextUser && 'name' in nextUser;
+      return {
+        user: isFullUpdate
+          ? { ...(nextUser as User) }
+          : { ...state.user, ...nextUser },
+      };
+    });
+  },
+  updateCreditScore: (newScore) => {
+    useAppStore.setState((state) => {
+      if (!state.user) return { user: state.user };
+      return {
+        user: { ...state.user, creditScore: newScore },
+      };
+    });
   },
 });
 
@@ -99,8 +114,8 @@ export const useAppStore = create<AppStore>((...args) => ({
 }));
 
 export const useAuth = () => {
-  const { user, token, login, logout, setUser } = useAppStore();
-  return { user, token, login, logout, setUser };
+  const { user, token, login, logout, setUser, updateCreditScore } = useAppStore();
+  return { user, token, login, logout, setUser, updateCreditScore };
 };
 
 export const useUi = () => {

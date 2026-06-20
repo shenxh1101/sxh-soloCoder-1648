@@ -213,34 +213,57 @@ export default function Approvals() {
       ]);
     }
 
+    let realPending: ApprovalWithRoom[] = [];
+    let realHistory: ApprovalWithRoom[] = [];
+    let loadPendingSuccess = false;
+    let loadHistorySuccess = false;
+
     try {
       const pendingRes = await approvalService.getPendingApprovals({ pageSize: 50 });
-      const enrichedPending = pendingRes.items.map((b) => ({
-        ...b,
-        roomName: roomMap[b.roomId] || b.roomId,
-        userName: userNames[b.userId] || '未知用户',
-      }));
-      setPendingList(enrichedPending.length > 0 ? enrichedPending : mockPendingApprovals);
+      if (pendingRes && pendingRes.items && pendingRes.items.length > 0) {
+        const enrichedPending = pendingRes.items.map((b) => ({
+          ...b,
+          roomName: roomMap[b.roomId] || b.roomId,
+          userName: userNames[b.userId] || '未知用户',
+        }));
+        realPending = enrichedPending;
+        loadPendingSuccess = true;
+      }
     } catch {
-      setPendingList(mockPendingApprovals);
+      // fallback to mock
     }
+    const pendingListData = loadPendingSuccess ? realPending : mockPendingApprovals;
+    setPendingList(pendingListData);
 
     try {
       const historyRes = await approvalService.getMyApprovalHistory({ pageSize: 50 });
-      const enrichedHistory = historyRes.items.map((b) => ({
-        ...b,
-        roomName: roomMap[b.roomId] || b.roomId,
-        userName: userNames[b.userId] || '未知用户',
-      }));
-      setHistoryList(enrichedHistory.length > 0 ? enrichedHistory : mockHistoryApprovals);
+      if (historyRes && historyRes.items && historyRes.items.length > 0) {
+        const enrichedHistory = historyRes.items.map((b) => ({
+          ...b,
+          roomName: roomMap[b.roomId] || b.roomId,
+          userName: userNames[b.userId] || '未知用户',
+        }));
+        realHistory = enrichedHistory;
+        loadHistorySuccess = true;
+      }
     } catch {
-      setHistoryList(mockHistoryApprovals);
+      // fallback to mock
     }
+    const historyListData = loadHistorySuccess ? realHistory : mockHistoryApprovals;
+    setHistoryList(historyListData);
+
+    const today = new Date().toISOString().slice(0, 10);
+    const todayApproved = historyListData.filter(
+      (b) => (b.status === 'locked' || b.status === 'completed') && (b.approvalTime ? b.approvalTime.slice(0, 10) === today : false),
+    ).length;
+    const todayRejected = historyListData.filter(
+      (b) => b.status === 'rejected' && (b.approvalTime ? b.approvalTime.slice(0, 10) === today : false),
+    ).length;
 
     setStats({
-      pending: mockPendingApprovals.length,
-      todayApproved: mockHistoryApprovals.filter((b) => b.status === 'locked' || b.status === 'completed').length,
-      todayRejected: mockHistoryApprovals.filter((b) => b.status === 'rejected').length,
+      pending: pendingListData.length,
+      todayApproved: todayApproved > 0 ? todayApproved : mockHistoryApprovals.filter((b) => b.status === 'locked' || b.status === 'completed').length,
+      todayRejected: todayRejected > 0 ? todayRejected : mockHistoryApprovals.filter((b) => b.status === 'rejected').length,
     });
 
     setLoading(false);
