@@ -1,0 +1,43 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Noto Sans SC', system-ui, sans-serif;
+  }
+
+  body {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #f0f5fb 0%, #e8eef7 50%, #f5f0fb 100%);
+    background-attachment: fixed;
+  }
+}
+
+@layer utilities {
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: rgba(30, 58, 95, 0.05);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #4d80c2 0%, #2e5fa6 100%);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #2e5fa6 0%, #1e3a5f 100%);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #4d80c2 rgba(30, 58, 95, 0.05);
+  }
+}
