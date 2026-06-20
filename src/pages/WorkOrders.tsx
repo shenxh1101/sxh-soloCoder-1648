@@ -37,113 +37,7 @@ interface WorkOrderWithDetails extends WorkOrder {
   assigneeName?: string;
 }
 
-const mockDevices: Device[] = [
-  { id: 'dev-001', name: 'EPSON投影仪-3F-A', type: 'projector', status: 'normal', faultCount: 1, roomId: 'room-001' },
-  { id: 'dev-002', name: 'SmartBoard白板-3F-B', type: 'whiteboard', status: 'normal', faultCount: 0, roomId: 'room-002' },
-  { id: 'dev-003', name: 'Polycom视频会议-3F-A', type: 'video-conference', status: 'faulty', faultCount: 3, roomId: 'room-001' },
-  { id: 'dev-004', name: 'Yealink麦克风-3F-A', type: 'microphone', status: 'maintenance', faultCount: 2, roomId: 'room-003' },
-  { id: 'dev-005', name: '咖啡机-5F', type: 'other', status: 'normal', faultCount: 0, roomId: 'room-003' },
-  { id: 'dev-007', name: '投影仪-2F', type: 'projector', status: 'faulty', faultCount: 4, roomId: 'room-005' },
-];
 
-const mockWorkOrders: WorkOrderWithDetails[] = [
-  {
-    id: 'wo-001',
-    deviceId: 'dev-003',
-    reporterId: 'user-002',
-    assigneeId: 'user-101',
-    faultType: '网络问题',
-    description: '视频会议系统无法连接到服务器，提示网络错误',
-    status: 'processing',
-    createdAt: '2026-06-20T09:15:00',
-    assignedAt: '2026-06-20T09:30:00',
-    deviceName: 'Polycom视频会议-3F-A',
-    reporterName: '李四',
-    assigneeName: '运维-李工',
-  },
-  {
-    id: 'wo-002',
-    deviceId: 'dev-007',
-    reporterId: 'user-003',
-    faultType: '显示异常',
-    description: '投影仪画面偏黄，色彩失真严重',
-    status: 'pending',
-    createdAt: '2026-06-20T10:45:00',
-    deviceName: '投影仪-2F',
-    reporterName: '王五',
-  },
-  {
-    id: 'wo-003',
-    deviceId: 'dev-004',
-    reporterId: 'user-004',
-    assigneeId: 'user-102',
-    faultType: '声音问题',
-    description: '麦克风有杂音，对方听不清我们的声音',
-    status: 'completed',
-    createdAt: '2026-06-20T08:00:00',
-    assignedAt: '2026-06-20T08:15:00',
-    completedAt: '2026-06-20T09:45:00',
-    confirmCode: '872361',
-    deviceName: 'Yealink麦克风-3F-A',
-    reporterName: '赵六',
-    assigneeName: '运维-王工',
-  },
-  {
-    id: 'wo-004',
-    deviceId: 'dev-001',
-    reporterId: 'user-005',
-    faultType: '无法开机',
-    description: '投影仪按电源键无反应，指示灯不亮',
-    status: 'pending',
-    createdAt: '2026-06-20T11:20:00',
-    deviceName: 'EPSON投影仪-3F-A',
-    reporterName: '钱七',
-  },
-  {
-    id: 'wo-005',
-    deviceId: 'dev-005',
-    reporterId: 'user-006',
-    assigneeId: 'user-102',
-    faultType: '其他',
-    description: '咖啡机出水量小，怀疑水垢堵塞',
-    status: 'assigned',
-    createdAt: '2026-06-20T07:30:00',
-    assignedAt: '2026-06-20T08:00:00',
-    deviceName: '咖啡机-5F',
-    reporterName: '孙八',
-    assigneeName: '运维-王工',
-  },
-  {
-    id: 'wo-006',
-    deviceId: 'dev-002',
-    reporterId: 'user-002',
-    assigneeId: 'user-103',
-    faultType: '显示异常',
-    description: '白板触摸不灵敏，部分区域无反应',
-    status: 'processing',
-    createdAt: '2026-06-19T14:00:00',
-    assignedAt: '2026-06-19T14:30:00',
-    deviceName: 'SmartBoard白板-3F-B',
-    reporterName: '李四',
-    assigneeName: '运维-张工',
-  },
-  {
-    id: 'wo-007',
-    deviceId: 'dev-003',
-    reporterId: 'user-007',
-    assigneeId: 'user-101',
-    faultType: '网络问题',
-    description: '远程参与方无法听到我方声音',
-    status: 'completed',
-    createdAt: '2026-06-18T10:00:00',
-    assignedAt: '2026-06-18T10:15:00',
-    completedAt: '2026-06-18T11:30:00',
-    confirmCode: '452189',
-    deviceName: 'Polycom视频会议-3F-A',
-    reporterName: '周九',
-    assigneeName: '运维-李工',
-  },
-];
 
 const workOrderStatusMap: Record<WorkOrderStatus, { label: string; variant: 'warning' | 'info' | 'default' | 'success' | 'danger' }> = {
   pending: { label: '待处理', variant: 'warning' },
@@ -211,28 +105,25 @@ export default function WorkOrders() {
 
   async function loadData() {
     setLoading(true);
-    try {
-      const devicesRes = await deviceService.getDevices({ pageSize: 100 });
-      setDevices(devicesRes.items.length > 0 ? devicesRes.items : mockDevices);
-    } catch {
-      setDevices(mockDevices);
-    }
+    const devicesRes = await deviceService.getDevices({ pageSize: 100 });
+    const loadedDevices = devicesRes.ok && devicesRes.data ? devicesRes.data.items : [];
+    setDevices(loadedDevices);
 
-    try {
-      const res = isAdmin
-        ? await workOrderService.getWorkOrders({ pageSize: 100 })
-        : await workOrderService.getMyReported({ pageSize: 100 });
-      const deviceNameMap: Record<string, string> = {};
-      devices.forEach((d) => (deviceNameMap[d.id] = d.name));
-      const enriched = res.items.map((wo) => ({
+    const deviceNameMap: Record<string, string> = {};
+    loadedDevices.forEach((d) => (deviceNameMap[d.id] = d.name));
+    const res = isAdmin
+      ? await workOrderService.getWorkOrders({ pageSize: 100 })
+      : await workOrderService.getMyReported({ pageSize: 100 });
+    if (res.ok && res.data) {
+      const enriched = res.data.items.map((wo) => ({
         ...wo,
         deviceName: deviceNameMap[wo.deviceId] || wo.deviceId,
-        reporterName: '提交人',
+        reporterName: wo.reporterId ? `员工 ${(wo.reporterId || '').slice(-3)}` : '提交人',
         assigneeName: wo.assigneeId ? assigneeNameMap[wo.assigneeId] : undefined,
       }));
-      setWorkOrders(enriched.length > 0 ? enriched : mockWorkOrders);
-    } catch {
-      setWorkOrders(mockWorkOrders);
+      setWorkOrders(enriched);
+    } else {
+      setWorkOrders([]);
     }
     setLoading(false);
   }
@@ -282,24 +173,12 @@ export default function WorkOrders() {
       return;
     }
     setSubmitting(true);
-    try {
-      await workOrderService.createWorkOrder(createForm);
+    const result = await workOrderService.createWorkOrder(createForm);
+    if (result.ok) {
       addToast({ type: 'success', message: '报修工单已提交' });
-    } catch {
-      addToast({ type: 'info', message: '模拟：报修工单已提交' });
-      const device = devices.find((d) => d.id === createForm.deviceId);
-      const newOrder: WorkOrderWithDetails = {
-        id: `wo-${Date.now()}`,
-        deviceId: createForm.deviceId,
-        reporterId: currentUserId || 'user-001',
-        faultType: createForm.faultType,
-        description: createForm.description,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-        deviceName: device?.name,
-        reporterName: user?.name,
-      };
-      setWorkOrders((prev) => [newOrder, ...prev]);
+      await loadData();
+    } else {
+      addToast({ type: 'error', message: result.message || '提交失败' });
     }
     setCreateForm({ deviceId: '', faultType: '无法开机', description: '' });
     setCreateModalOpen(false);
@@ -312,69 +191,46 @@ export default function WorkOrders() {
       addToast({ type: 'warning', message: '请选择处理人' });
       return;
     }
-    try {
-      await workOrderService.assignWorkOrder(selectedOrder.id, { assigneeId });
+    const result = await workOrderService.assignWorkOrder(selectedOrder.id, { assigneeId });
+    if (result.ok) {
       addToast({ type: 'success', message: '已分配处理人' });
-    } catch {
-      addToast({ type: 'info', message: '模拟：已分配处理人' });
+      await loadData();
+      setSelectedOrder((prev) =>
+        prev ? { ...prev, assigneeId, assigneeName: assigneeNameMap[assigneeId], status: 'assigned', assignedAt: new Date().toISOString() } : prev
+      );
+    } else {
+      addToast({ type: 'error', message: result.message || '分配失败' });
     }
-    setWorkOrders((prev) =>
-      prev.map((wo) =>
-        wo.id === selectedOrder.id
-          ? { ...wo, assigneeId, assigneeName: assigneeNameMap[assigneeId], status: 'assigned', assignedAt: new Date().toISOString() }
-          : wo
-      )
-    );
-    setSelectedOrder((prev) =>
-      prev ? { ...prev, assigneeId, assigneeName: assigneeNameMap[assigneeId], status: 'assigned', assignedAt: new Date().toISOString() } : prev
-    );
   }
 
   async function handleStatusTransition(targetStatus: 'assigned' | 'processing' | 'completed') {
     if (!selectedOrder) return;
-    try {
-      if (targetStatus === 'processing') {
-        await workOrderService.startWorkOrder(selectedOrder.id);
+    let result;
+    if (targetStatus === 'processing') {
+      result = await workOrderService.startWorkOrder(selectedOrder.id);
+      if (result.ok) {
         addToast({ type: 'success', message: '已开始处理' });
-      } else if (targetStatus === 'completed') {
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
-        await workOrderService.completeWorkOrder(selectedOrder.id, { confirmCode: code });
+        await loadData();
+        setSelectedOrder((prev) =>
+          prev ? { ...prev, status: targetStatus, assignedAt: prev.assignedAt || new Date().toISOString() } : prev
+        );
+      } else {
+        addToast({ type: 'error', message: result.message || '操作失败' });
+      }
+    } else if (targetStatus === 'completed') {
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      result = await workOrderService.completeWorkOrder(selectedOrder.id, { confirmCode: code });
+      if (result.ok) {
         addToast({ type: 'success', message: '工单已完成，确认码已生成' });
         setGeneratedConfirmCode(code);
-      }
-    } catch {
-      if (targetStatus === 'processing') {
-        addToast({ type: 'info', message: '模拟：已开始处理' });
-      } else if (targetStatus === 'completed') {
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
-        addToast({ type: 'info', message: `模拟：工单已完成，确认码 ${code}` });
-        setGeneratedConfirmCode(code);
+        await loadData();
+        setSelectedOrder((prev) =>
+          prev ? { ...prev, status: targetStatus, completedAt: new Date().toISOString(), confirmCode: code } : prev
+        );
+      } else {
+        addToast({ type: 'error', message: result.message || '操作失败' });
       }
     }
-    setWorkOrders((prev) =>
-      prev.map((wo) => {
-        if (wo.id === selectedOrder.id) {
-          const updated = { ...wo, status: targetStatus };
-          if (targetStatus === 'processing') updated.assignedAt = updated.assignedAt || new Date().toISOString();
-          if (targetStatus === 'completed') {
-            updated.completedAt = new Date().toISOString();
-            updated.confirmCode = generatedConfirmCode || wo.confirmCode;
-          }
-          return updated;
-        }
-        return wo;
-      })
-    );
-    setSelectedOrder((prev) => {
-      if (!prev) return prev;
-      const updated = { ...prev, status: targetStatus };
-      if (targetStatus === 'processing') updated.assignedAt = updated.assignedAt || new Date().toISOString();
-      if (targetStatus === 'completed') {
-        updated.completedAt = new Date().toISOString();
-        updated.confirmCode = generatedConfirmCode || prev.confirmCode;
-      }
-      return updated;
-    });
   }
 
   function handleConfirmCodeSubmit() {

@@ -46,144 +46,7 @@ interface MaintenanceWithDetails extends MaintenanceRecord {
   operatorName?: string;
 }
 
-const mockDevices: DeviceWithRoom[] = [
-  {
-    id: 'dev-001',
-    name: 'EPSON投影仪-3F-A',
-    type: 'projector',
-    roomId: 'room-001',
-    status: 'normal',
-    faultCount: 1,
-    lastMaintenanceDate: '2026-05-15',
-    nextMaintenanceDate: '2026-07-15',
-    roomName: '星辰会议室',
-  },
-  {
-    id: 'dev-002',
-    name: 'SmartBoard白板-3F-B',
-    type: 'whiteboard',
-    roomId: 'room-002',
-    status: 'normal',
-    faultCount: 0,
-    lastMaintenanceDate: '2026-05-20',
-    nextMaintenanceDate: '2026-07-20',
-    roomName: '云端会议室',
-  },
-  {
-    id: 'dev-003',
-    name: 'Polycom视频会议-3F-A',
-    type: 'video-conference',
-    roomId: 'room-001',
-    status: 'faulty',
-    faultCount: 3,
-    lastMaintenanceDate: '2026-04-10',
-    nextMaintenanceDate: '2026-06-25',
-    roomName: '星辰会议室',
-  },
-  {
-    id: 'dev-004',
-    name: 'Yealink麦克风-3F-A',
-    type: 'microphone',
-    roomId: 'room-003',
-    status: 'maintenance',
-    faultCount: 2,
-    lastMaintenanceDate: '2026-06-10',
-    nextMaintenanceDate: '2026-08-10',
-    roomName: '绿洲会议室',
-  },
-  {
-    id: 'dev-005',
-    name: '咖啡机-5F',
-    type: 'other',
-    roomId: 'room-003',
-    status: 'normal',
-    faultCount: 0,
-    lastMaintenanceDate: '2026-06-01',
-    nextMaintenanceDate: '2026-07-01',
-    roomName: '绿洲会议室',
-  },
-  {
-    id: 'dev-006',
-    name: '智能照明系统-1F',
-    type: 'other',
-    roomId: 'room-004',
-    status: 'normal',
-    faultCount: 1,
-    lastMaintenanceDate: '2026-05-28',
-    nextMaintenanceDate: '2026-07-28',
-    roomName: '创智报告厅',
-  },
-  {
-    id: 'dev-007',
-    name: '投影仪-2F',
-    type: 'projector',
-    roomId: 'room-005',
-    status: 'faulty',
-    faultCount: 4,
-    lastMaintenanceDate: '2026-03-15',
-    nextMaintenanceDate: '2026-06-22',
-    roomName: '灵感站',
-  },
-];
 
-const mockMaintenance: MaintenanceWithDetails[] = [
-  {
-    id: 'mt-001',
-    deviceId: 'dev-003',
-    scheduledDate: '2026-06-22',
-    type: 'corrective',
-    operatorId: 'user-101',
-    notes: '视频会议系统无法连接，需要检修',
-    status: 'scheduled',
-    deviceName: 'Polycom视频会议-3F-A',
-    operatorName: '运维-李工',
-  },
-  {
-    id: 'mt-002',
-    deviceId: 'dev-004',
-    scheduledDate: '2026-06-20',
-    type: 'corrective',
-    operatorId: 'user-102',
-    notes: '麦克风出现杂音，更换音频线缆',
-    completedDate: '2026-06-20',
-    status: 'completed',
-    deviceName: 'Yealink麦克风-3F-A',
-    operatorName: '运维-王工',
-  },
-  {
-    id: 'mt-003',
-    deviceId: 'dev-007',
-    scheduledDate: '2026-06-18',
-    type: 'preventive',
-    operatorId: 'user-101',
-    notes: '季度预防性维护，清洁镜头和更换滤网',
-    status: 'overdue',
-    deviceName: '投影仪-2F',
-    operatorName: '运维-李工',
-  },
-  {
-    id: 'mt-004',
-    deviceId: 'dev-001',
-    scheduledDate: '2026-07-15',
-    type: 'preventive',
-    operatorId: 'user-103',
-    notes: '季度例行检查',
-    status: 'scheduled',
-    deviceName: 'EPSON投影仪-3F-A',
-    operatorName: '运维-张工',
-  },
-  {
-    id: 'mt-005',
-    deviceId: 'dev-005',
-    scheduledDate: '2026-07-01',
-    type: 'preventive',
-    operatorId: 'user-102',
-    notes: '清洁和除垢',
-    status: 'scheduled',
-    deviceName: '咖啡机-5F',
-    operatorName: '运维-王工',
-  },
-];
 
 const deviceTypeMap: Record<DeviceType, { label: string; icon: typeof Projector; color: string }> = {
   projector: { label: '投影仪', icon: Projector, color: 'text-indigo-600' },
@@ -260,39 +123,24 @@ export default function DeviceManage() {
 
   async function loadData() {
     setLoading(true);
-    try {
-      const roomsRes = await roomService.getRooms({ pageSize: 100 });
-      setRooms(roomsRes.items.length > 0 ? roomsRes.items : [
-        { id: 'room-001', name: '星辰会议室', floor: '3F', capacity: 15, equipmentIds: [], status: 'active' },
-        { id: 'room-002', name: '云端会议室', floor: '3F', capacity: 10, equipmentIds: [], status: 'active' },
-        { id: 'room-003', name: '绿洲会议室', floor: '5F', capacity: 8, equipmentIds: [], status: 'active' },
-        { id: 'room-004', name: '创智报告厅', floor: '1F', capacity: 50, equipmentIds: [], status: 'active' },
-        { id: 'room-005', name: '灵感站', floor: '2F', capacity: 6, equipmentIds: [], status: 'active' },
-      ]);
-    } catch {
-      setRooms([
-        { id: 'room-001', name: '星辰会议室', floor: '3F', capacity: 15, equipmentIds: [], status: 'active' },
-        { id: 'room-002', name: '云端会议室', floor: '3F', capacity: 10, equipmentIds: [], status: 'active' },
-        { id: 'room-003', name: '绿洲会议室', floor: '5F', capacity: 8, equipmentIds: [], status: 'active' },
-        { id: 'room-004', name: '创智报告厅', floor: '1F', capacity: 50, equipmentIds: [], status: 'active' },
-        { id: 'room-005', name: '灵感站', floor: '2F', capacity: 6, equipmentIds: [], status: 'active' },
-      ]);
-    }
+    const roomsRes = await roomService.getRooms({ pageSize: 100 });
+    const loadedRooms = roomsRes.ok && roomsRes.data ? roomsRes.data.items : [];
+    setRooms(loadedRooms);
 
-    try {
-      const devicesRes = await deviceService.getDevices({ pageSize: 100 });
-      const roomNameMap: Record<string, string> = {};
-      rooms.forEach((r) => (roomNameMap[r.id] = r.name));
-      const enriched = devicesRes.items.map((d) => ({
+    const devicesRes = await deviceService.getDevices({ pageSize: 100 });
+    const roomNameMap: Record<string, string> = {};
+    loadedRooms.forEach((r) => (roomNameMap[r.id] = r.name));
+    if (devicesRes.ok && devicesRes.data) {
+      const enriched = devicesRes.data.items.map((d) => ({
         ...d,
         roomName: d.roomId ? roomNameMap[d.roomId] : '未分配',
       }));
-      setDevices(enriched.length > 0 ? enriched : mockDevices);
-    } catch {
-      setDevices(mockDevices);
+      setDevices(enriched);
+    } else {
+      setDevices([]);
     }
 
-    setMaintenance(mockMaintenance);
+    setMaintenance([]);
     setLoading(false);
   }
 
@@ -332,53 +180,30 @@ export default function DeviceManage() {
       return;
     }
     setSubmitting(true);
-    try {
-      if (isEditingDevice && deviceForm.id) {
-        await deviceService.updateDevice(deviceForm.id, deviceForm);
-        addToast({ type: 'success', message: '设备已更新' });
-      } else {
-        await deviceService.createDevice(deviceForm);
-        addToast({ type: 'success', message: '设备已创建' });
-      }
+    let result;
+    if (isEditingDevice && deviceForm.id) {
+      result = await deviceService.updateDevice(deviceForm.id, deviceForm);
+    } else {
+      result = await deviceService.createDevice(deviceForm);
+    }
+    if (result.ok) {
+      addToast({ type: 'success', message: `设备已${isEditingDevice ? '更新' : '创建'}` });
       await loadData();
       setDeviceModalOpen(false);
-    } catch {
-      addToast({ type: 'info', message: `模拟：${isEditingDevice ? '已更新' : '已创建'}设备` });
-      if (isEditingDevice && deviceForm.id) {
-        setDevices((prev) =>
-          prev.map((d) =>
-            d.id === deviceForm.id ? { ...d, ...deviceForm } : d
-          )
-        );
-      } else {
-        const newDevice: DeviceWithRoom = {
-          id: `dev-${Date.now()}`,
-          ...deviceForm,
-          status: 'normal',
-          faultCount: 0,
-          roomName: rooms.find((r) => r.id === deviceForm.roomId)?.name || '未分配',
-        };
-        setDevices((prev) => [...prev, newDevice]);
-      }
-      setDeviceModalOpen(false);
+    } else {
+      addToast({ type: 'error', message: result.message || `${isEditingDevice ? '更新' : '创建'}失败` });
     }
     setSubmitting(false);
   }
 
   async function handleReportFault(device: DeviceWithRoom) {
-    try {
-      await deviceService.updateDeviceStatus(device.id, 'faulty');
+    const result = await deviceService.updateDeviceStatus(device.id, 'faulty');
+    if (result.ok) {
       addToast({ type: 'success', message: '已上报故障' });
-    } catch {
-      addToast({ type: 'info', message: '模拟：已上报故障' });
+      await loadData();
+    } else {
+      addToast({ type: 'error', message: result.message || '上报失败' });
     }
-    setDevices((prev) =>
-      prev.map((d) =>
-        d.id === device.id
-          ? { ...d, status: 'faulty', faultCount: d.faultCount + 1 }
-          : d
-      )
-    );
   }
 
   function openScheduleMaintenance(device?: DeviceWithRoom) {
@@ -402,29 +227,16 @@ export default function DeviceManage() {
       return;
     }
     setSubmitting(true);
-    const device = devices.find((d) => d.id === maintenanceForm.deviceId);
-    const newRecord: MaintenanceWithDetails = {
-      id: `mt-${Date.now()}`,
-      deviceId: maintenanceForm.deviceId,
-      scheduledDate: maintenanceForm.scheduledDate,
-      type: maintenanceForm.type,
-      operatorId: maintenanceForm.operatorId,
-      notes: maintenanceForm.notes,
-      status: 'scheduled',
-      deviceName: device?.name,
-      operatorName: '运维-李工',
-    };
-    try {
-      await deviceService.scheduleMaintenance(
-        maintenanceForm.deviceId,
-        maintenanceForm.scheduledDate,
-        maintenanceForm.type
-      );
+    const result = await deviceService.scheduleMaintenance(
+      maintenanceForm.deviceId,
+      maintenanceForm.scheduledDate,
+      maintenanceForm.type
+    );
+    if (result.ok) {
       addToast({ type: 'success', message: '维护计划已创建' });
-    } catch {
-      addToast({ type: 'info', message: '模拟：维护计划已创建' });
+    } else {
+      addToast({ type: 'error', message: result.message || '创建维护计划失败' });
     }
-    setMaintenance((prev) => [...prev, newRecord]);
     setMaintenanceModalOpen(false);
     setSubmitting(false);
   }

@@ -1,5 +1,6 @@
 import { api } from './api';
 import type { Booking } from '../types';
+import type { ApiResult } from './api';
 
 export interface GetApprovalsQuery {
   page?: number;
@@ -19,19 +20,20 @@ export interface ApprovalsListResponse {
 }
 
 export const approvalService = {
-  getPendingApprovals: (params?: GetApprovalsQuery) =>
+  getPendingApprovals: (params?: GetApprovalsQuery): Promise<ApiResult<ApprovalsListResponse>> =>
     api.get<ApprovalsListResponse>('/approvals/pending', { params }),
 
-  getMyApprovalHistory: (params?: GetApprovalsQuery) =>
+  getMyApprovalHistory: (params?: GetApprovalsQuery): Promise<ApiResult<ApprovalsListResponse>> =>
     api.get<ApprovalsListResponse>('/approvals/history', { params }),
 
-  approve: (bookingId: string, data?: ApprovalDecision) =>
+  approve: (bookingId: string, data?: ApprovalDecision): Promise<ApiResult<Booking>> =>
     api.post<Booking>(`/approvals/${bookingId}/approve`, data),
 
-  reject: (bookingId: string, data?: ApprovalDecision) =>
+  reject: (bookingId: string, data?: ApprovalDecision): Promise<ApiResult<void>> =>
     api.post<void>(`/approvals/${bookingId}/reject`, data),
 
-  getApproval: (bookingId: string) => api.get<Booking>(`/approvals/${bookingId}`),
+  getApproval: (bookingId: string): Promise<ApiResult<Booking>> =>
+    api.get<Booking>(`/approvals/${bookingId}`),
 };
 
 export default approvalService;

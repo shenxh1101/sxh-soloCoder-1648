@@ -1,5 +1,6 @@
 import { api } from './api';
 import type { MeetingRoom, RoomStatus } from '../types';
+import type { ApiResult } from './api';
 
 export interface CreateRoomRequest {
   name: string;
@@ -29,23 +30,25 @@ export interface RoomsListResponse {
 }
 
 export const roomService = {
-  getRooms: (params?: GetRoomsQuery) =>
+  getRooms: (params?: GetRoomsQuery): Promise<ApiResult<RoomsListResponse>> =>
     api.get<RoomsListResponse>('/rooms', { params }),
 
-  getRoom: (id: string) => api.get<MeetingRoom>(`/rooms/${id}`),
+  getRoom: (id: string): Promise<ApiResult<MeetingRoom>> =>
+    api.get<MeetingRoom>(`/rooms/${id}`),
 
-  createRoom: (data: CreateRoomRequest) =>
+  createRoom: (data: CreateRoomRequest): Promise<ApiResult<MeetingRoom>> =>
     api.post<MeetingRoom>('/rooms', data),
 
-  updateRoom: (id: string, data: Partial<CreateRoomRequest>) =>
+  updateRoom: (id: string, data: Partial<CreateRoomRequest>): Promise<ApiResult<MeetingRoom>> =>
     api.put<MeetingRoom>(`/rooms/${id}`, data),
 
-  deleteRoom: (id: string) => api.delete<void>(`/rooms/${id}`),
+  deleteRoom: (id: string): Promise<ApiResult<void>> =>
+    api.delete<void>(`/rooms/${id}`),
 
-  updateRoomStatus: (id: string, status: RoomStatus) =>
+  updateRoomStatus: (id: string, status: RoomStatus): Promise<ApiResult<MeetingRoom>> =>
     api.patch<MeetingRoom>(`/rooms/${id}/status`, { status }),
 
-  getAvailableRooms: (startTime: string, endTime: string) =>
+  getAvailableRooms: (startTime: string, endTime: string): Promise<ApiResult<MeetingRoom[]>> =>
     api.get<MeetingRoom[]>('/rooms/available', {
       params: { startTime, endTime },
     }),

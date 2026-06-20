@@ -28,131 +28,6 @@ interface ApprovalWithRoom extends Booking {
   userName?: string;
 }
 
-const mockPendingApprovals: ApprovalWithRoom[] = [
-  {
-    id: 'bk-001',
-    roomId: 'room-001',
-    userId: 'user-002',
-    title: 'Q2季度产品规划评审会',
-    startTime: '2026-06-21T09:00:00',
-    endTime: '2026-06-21T11:30:00',
-    attendeeCount: 12,
-    requiredDeviceIds: ['dev-001', 'dev-003'],
-    status: 'pending_approval',
-    createdAt: '2026-06-20T08:30:00',
-    roomName: '星辰会议室',
-    userName: '李四',
-  },
-  {
-    id: 'bk-002',
-    roomId: 'room-002',
-    userId: 'user-003',
-    title: '跨部门技术方案讨论会',
-    startTime: '2026-06-21T14:00:00',
-    endTime: '2026-06-21T17:00:00',
-    attendeeCount: 8,
-    requiredDeviceIds: ['dev-002'],
-    status: 'pending_approval',
-    createdAt: '2026-06-20T09:15:00',
-    roomName: '云端会议室',
-    userName: '王五',
-  },
-  {
-    id: 'bk-003',
-    roomId: 'room-003',
-    userId: 'user-004',
-    title: '全天项目封闭开发',
-    startTime: '2026-06-22T09:00:00',
-    endTime: '2026-06-22T18:00:00',
-    attendeeCount: 6,
-    requiredDeviceIds: ['dev-004', 'dev-005'],
-    status: 'pending_approval',
-    createdAt: '2026-06-20T10:00:00',
-    roomName: '绿洲会议室',
-    userName: '赵六',
-  },
-  {
-    id: 'bk-004',
-    roomId: 'room-001',
-    userId: 'user-005',
-    title: '客户演示会议',
-    startTime: '2026-06-21T10:00:00',
-    endTime: '2026-06-21T11:00:00',
-    attendeeCount: 5,
-    requiredDeviceIds: ['dev-001'],
-    status: 'pending_approval',
-    createdAt: '2026-06-20T11:20:00',
-    roomName: '星辰会议室',
-    userName: '钱七',
-  },
-  {
-    id: 'bk-005',
-    roomId: 'room-004',
-    userId: 'user-006',
-    title: '新员工入职培训',
-    startTime: '2026-06-23T09:00:00',
-    endTime: '2026-06-23T12:00:00',
-    attendeeCount: 20,
-    requiredDeviceIds: ['dev-001', 'dev-006'],
-    status: 'pending_approval',
-    createdAt: '2026-06-20T13:45:00',
-    roomName: '创智报告厅',
-    userName: '孙八',
-  },
-];
-
-const mockHistoryApprovals: ApprovalWithRoom[] = [
-  {
-    id: 'bk-101',
-    roomId: 'room-001',
-    userId: 'user-010',
-    title: '周度部门例会',
-    startTime: '2026-06-19T09:00:00',
-    endTime: '2026-06-19T10:00:00',
-    attendeeCount: 10,
-    requiredDeviceIds: ['dev-001'],
-    status: 'locked',
-    approvalManagerId: 'user-001',
-    approvalTime: '2026-06-18T16:30:00',
-    createdAt: '2026-06-18T14:00:00',
-    roomName: '星辰会议室',
-    userName: '周九',
-  },
-  {
-    id: 'bk-102',
-    roomId: 'room-002',
-    userId: 'user-011',
-    title: '预算审核会议',
-    startTime: '2026-06-19T14:00:00',
-    endTime: '2026-06-19T16:00:00',
-    attendeeCount: 6,
-    requiredDeviceIds: ['dev-002'],
-    status: 'rejected',
-    approvalManagerId: 'user-001',
-    approvalTime: '2026-06-18T17:00:00',
-    approvalComment: '时间段与已批准的重要客户会议冲突',
-    createdAt: '2026-06-18T15:30:00',
-    roomName: '云端会议室',
-    userName: '吴十',
-  },
-  {
-    id: 'bk-103',
-    roomId: 'room-003',
-    userId: 'user-012',
-    title: '产品需求评审',
-    startTime: '2026-06-20T10:00:00',
-    endTime: '2026-06-20T12:00:00',
-    attendeeCount: 8,
-    requiredDeviceIds: ['dev-004'],
-    status: 'completed',
-    approvalManagerId: 'user-001',
-    approvalTime: '2026-06-19T09:00:00',
-    createdAt: '2026-06-19T08:00:00',
-    roomName: '绿洲会议室',
-    userName: '郑十一',
-  },
-];
-
 interface ApprovalStats {
   pending: number;
   todayApproved: number;
@@ -174,6 +49,8 @@ export default function Approvals() {
   const [selectedBooking, setSelectedBooking] = useState<ApprovalWithRoom | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [loading, setLoading] = useState(false);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [rejecting, setRejecting] = useState(false);
   const [rooms, setRooms] = useState<MeetingRoom[]>([]);
 
   const roomMap = useMemo(() => {
@@ -184,15 +61,8 @@ export default function Approvals() {
     return map;
   }, [rooms]);
 
-  const userNames: Record<string, string> = {
-    'user-002': '李四',
-    'user-003': '王五',
-    'user-004': '赵六',
-    'user-005': '钱七',
-    'user-006': '孙八',
-    'user-010': '周九',
-    'user-011': '吴十',
-    'user-012': '郑十一',
+  const formatUserName = (userId: string) => {
+    return userId.length > 3 ? `员工 ${userId.slice(-3)}` : `员工 ${userId}`;
   };
 
   useEffect(() => {
@@ -201,56 +71,38 @@ export default function Approvals() {
 
   async function loadData() {
     setLoading(true);
-    try {
-      const roomsRes = await roomService.getRooms({ pageSize: 100 });
-      setRooms(roomsRes.items);
-    } catch {
-      setRooms([
-        { id: 'room-001', name: '星辰会议室', floor: '3F', capacity: 15, equipmentIds: [], status: 'active' },
-        { id: 'room-002', name: '云端会议室', floor: '3F', capacity: 10, equipmentIds: [], status: 'active' },
-        { id: 'room-003', name: '绿洲会议室', floor: '5F', capacity: 8, equipmentIds: [], status: 'active' },
-        { id: 'room-004', name: '创智报告厅', floor: '1F', capacity: 50, equipmentIds: [], status: 'active' },
-      ]);
+
+    const roomsRes = await roomService.getRooms({ pageSize: 100 });
+    if (roomsRes.ok && roomsRes.data) {
+      setRooms(roomsRes.data.items);
+    } else {
+      setRooms([]);
     }
 
     let realPending: ApprovalWithRoom[] = [];
     let realHistory: ApprovalWithRoom[] = [];
-    let loadPendingSuccess = false;
-    let loadHistorySuccess = false;
 
-    try {
-      const pendingRes = await approvalService.getPendingApprovals({ pageSize: 50 });
-      if (pendingRes && pendingRes.items && pendingRes.items.length > 0) {
-        const enrichedPending = pendingRes.items.map((b) => ({
-          ...b,
-          roomName: roomMap[b.roomId] || b.roomId,
-          userName: userNames[b.userId] || '未知用户',
-        }));
-        realPending = enrichedPending;
-        loadPendingSuccess = true;
-      }
-    } catch {
-      // fallback to mock
+    const pendingResult = await approvalService.getPendingApprovals({ pageSize: 50 });
+    if (pendingResult.ok && pendingResult.data) {
+      realPending = pendingResult.data.items.map((b) => ({
+        ...b,
+        roomName: roomMap[b.roomId] || b.roomId,
+        userName: formatUserName(b.userId),
+      }));
     }
-    const pendingListData = loadPendingSuccess ? realPending : mockPendingApprovals;
-    setPendingList(pendingListData);
+    setPendingList(realPending);
 
-    try {
-      const historyRes = await approvalService.getMyApprovalHistory({ pageSize: 50 });
-      if (historyRes && historyRes.items && historyRes.items.length > 0) {
-        const enrichedHistory = historyRes.items.map((b) => ({
-          ...b,
-          roomName: roomMap[b.roomId] || b.roomId,
-          userName: userNames[b.userId] || '未知用户',
-        }));
-        realHistory = enrichedHistory;
-        loadHistorySuccess = true;
-      }
-    } catch {
-      // fallback to mock
+    const historyResult = await approvalService.getMyApprovalHistory({ pageSize: 50 });
+    const historyListData: ApprovalWithRoom[] = [];
+    if (historyResult.ok && historyResult.data) {
+      realHistory = historyResult.data.items.map((b) => ({
+        ...b,
+        roomName: roomMap[b.roomId] || b.roomId,
+        userName: formatUserName(b.userId),
+      }));
+      historyListData.push(...realHistory);
     }
-    const historyListData = loadHistorySuccess ? realHistory : mockHistoryApprovals;
-    setHistoryList(historyListData);
+    setHistoryList(realHistory);
 
     const today = new Date().toISOString().slice(0, 10);
     const todayApproved = historyListData.filter(
@@ -261,9 +113,9 @@ export default function Approvals() {
     ).length;
 
     setStats({
-      pending: pendingListData.length,
-      todayApproved: todayApproved > 0 ? todayApproved : mockHistoryApprovals.filter((b) => b.status === 'locked' || b.status === 'completed').length,
-      todayRejected: todayRejected > 0 ? todayRejected : mockHistoryApprovals.filter((b) => b.status === 'rejected').length,
+      pending: realPending.length,
+      todayApproved,
+      todayRejected,
     });
 
     setLoading(false);
@@ -272,16 +124,15 @@ export default function Approvals() {
   const hasAccess = user?.role === 'manager' || user?.role === 'admin';
 
   async function handleApprove(booking: ApprovalWithRoom) {
-    try {
-      await approvalService.approve(booking.id);
+    setApprovingId(booking.id);
+    const result = await approvalService.approve(booking.id);
+    if (result.ok) {
       addToast({ type: 'success', message: '已通过审批' });
-    } catch {
-      addToast({ type: 'info', message: '模拟：已通过审批' });
+      await loadData();
+    } else {
+      addToast({ type: 'error', message: result.message || '审批失败' });
     }
-    setPendingList((prev) => prev.filter((b) => b.id !== booking.id));
-    setStats((s) => ({ ...s, pending: s.pending - 1, todayApproved: s.todayApproved + 1 }));
-    const approved = { ...booking, status: 'locked' as const, approvalTime: new Date().toISOString() };
-    setHistoryList((prev) => [approved, ...prev]);
+    setApprovingId(null);
   }
 
   function openRejectModal(booking: ApprovalWithRoom) {
@@ -296,27 +147,23 @@ export default function Approvals() {
       addToast({ type: 'warning', message: '请输入驳回理由' });
       return;
     }
-    try {
-      await approvalService.reject(selectedBooking.id, { comment: rejectReason });
+    setRejecting(true);
+    const result = await approvalService.reject(selectedBooking.id, { comment: rejectReason });
+    if (result.ok) {
       addToast({ type: 'success', message: '已驳回申请' });
-    } catch {
-      addToast({ type: 'info', message: '模拟：已驳回申请' });
+      setRejectModalOpen(false);
+      setSelectedBooking(null);
+      await loadData();
+    } else {
+      addToast({ type: 'error', message: result.message || '驳回失败' });
     }
-    setPendingList((prev) => prev.filter((b) => b.id !== selectedBooking.id));
-    setStats((s) => ({ ...s, pending: s.pending - 1, todayRejected: s.todayRejected + 1 }));
-    const rejected = {
-      ...selectedBooking,
-      status: 'rejected' as const,
-      approvalTime: new Date().toISOString(),
-      approvalComment: rejectReason,
-    };
-    setHistoryList((prev) => [rejected, ...prev]);
-    setRejectModalOpen(false);
-    setSelectedBooking(null);
+    setRejecting(false);
   }
 
   function getStatusBadge(status: Booking['status']) {
     switch (status) {
+      case 'pending_approval':
+        return <Badge variant="warning" dot>待审批</Badge>;
       case 'locked':
       case 'completed':
         return <Badge variant="success" dot>已通过</Badge>;
@@ -324,6 +171,8 @@ export default function Approvals() {
         return <Badge variant="danger" dot>已驳回</Badge>;
       case 'cancelled':
         return <Badge variant="default" dot>已取消</Badge>;
+      case 'released':
+        return <Badge variant="default" dot>已释放</Badge>;
       default:
         return <Badge variant="warning" dot>待审批</Badge>;
     }
@@ -467,15 +316,20 @@ export default function Approvals() {
                           }`}
                         >
                           <td className="py-4 px-4">
-                            <div className="flex items-center gap-2">
-                              {isLongBooking && activeTab === 'pending' && (
-                                <Badge variant="warning">长期预订</Badge>
-                              )}
-                              <span className="font-medium text-brand-800">{booking.title}</span>
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                {isLongBooking && activeTab === 'pending' && (
+                                  <Badge variant="warning">长期预订</Badge>
+                                )}
+                                <span className="font-medium text-brand-800">{booking.title}</span>
+                              </div>
+                              <div className="text-xs text-brand-500">
+                                发起人：{booking.userName || booking.userId}
+                              </div>
                             </div>
                           </td>
                           <td className="py-4 px-4">
-                            <span className="text-sm text-brand-700">{booking.userName}</span>
+                            <span className="text-sm text-brand-700">{booking.userName || booking.userId}</span>
                           </td>
                           <td className="py-4 px-4">
                             <span className="inline-flex items-center gap-1.5 text-sm text-brand-700">
@@ -509,13 +363,15 @@ export default function Approvals() {
                             <td className="py-4 px-4">{getStatusBadge(booking.status)}</td>
                           )}
                           <td className="py-4 px-4">
-                            {activeTab === 'pending' ? (
+                            {activeTab === 'pending' && (
                               <div className="flex items-center gap-2">
                                 <Button
                                   size="sm"
                                   variant="primary"
                                   leftIcon={<CheckCircle className="h-4 w-4" />}
                                   onClick={() => handleApprove(booking)}
+                                  loading={approvingId === booking.id}
+                                  disabled={approvingId !== null}
                                 >
                                   通过
                                 </Button>
@@ -524,11 +380,13 @@ export default function Approvals() {
                                   variant="danger"
                                   leftIcon={<XCircle className="h-4 w-4" />}
                                   onClick={() => openRejectModal(booking)}
+                                  disabled={approvingId !== null}
                                 >
                                   驳回
                                 </Button>
                               </div>
-                            ) : (
+                            )}
+                            {activeTab === 'history' && (
                               <div className="flex items-center gap-2">
                                 <Button
                                   size="sm"
@@ -553,7 +411,7 @@ export default function Approvals() {
 
       <Modal
         open={rejectModalOpen}
-        onClose={() => setRejectModalOpen(false)}
+        onClose={() => !rejecting && setRejectModalOpen(false)}
         title="驳回审批"
         size="md"
         footer={
@@ -562,6 +420,7 @@ export default function Approvals() {
             onConfirm={handleConfirmReject}
             confirmText="确认驳回"
             confirmVariant="danger"
+            confirmLoading={rejecting}
           />
         }
       >

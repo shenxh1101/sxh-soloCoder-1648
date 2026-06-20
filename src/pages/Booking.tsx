@@ -87,45 +87,7 @@ const ROOM_GRADIENT = [
   'from-emerald-400 via-green-500 to-teal-600',
 ];
 
-const MOCK_ROOMS: MeetingRoom[] = [
-  { id: 'room-001', name: '星河会议厅', floor: '3F', capacity: 30, equipmentIds: ['projector', 'whiteboard', 'video-conference', 'microphone'], status: 'active' as RoomStatus, description: '大型会议厅，配备专业设备' },
-  { id: 'room-002', name: '创新实验室', floor: '2F', capacity: 15, equipmentIds: ['projector', 'whiteboard'], status: 'active' as RoomStatus, description: '头脑风暴专用会议室' },
-  { id: 'room-003', name: '阳光会议室', floor: '1F', capacity: 10, equipmentIds: ['whiteboard', 'microphone'], status: 'active' as RoomStatus, description: '明亮舒适的小型会议室' },
-  { id: 'room-004', name: '头脑风暴室', floor: '4F', capacity: 8, equipmentIds: ['whiteboard', 'video-conference'], status: 'active' as RoomStatus, description: '创意碰撞空间' },
-  { id: 'room-005', name: '董事会议室', floor: '5F', capacity: 25, equipmentIds: ['projector', 'whiteboard', 'video-conference', 'microphone'], status: 'maintenance' as RoomStatus, description: '高管专用会议室' },
-  { id: 'room-006', name: '协作空间A', floor: '2F', capacity: 6, equipmentIds: ['projector'], status: 'active' as RoomStatus, description: '便捷小型讨论区' },
-];
 
-const generateMockBookings = (rooms: MeetingRoom[], weekDates: Date[]): Record<string, Booking[]> => {
-  const bookings: Record<string, Booking[]> = {};
-  rooms.forEach((room) => {
-    bookings[room.id] = [];
-    weekDates.forEach((date, dayIdx) => {
-      if (Math.random() > 0.6) {
-        const startSlotIdx = Math.floor(Math.random() * 15);
-        const durationSlots = Math.floor(Math.random() * 4) + 2;
-        const endSlotIdx = Math.min(startSlotIdx + durationSlots, TIME_SLOTS.length - 1);
-        const startTime = new Date(date);
-        startTime.setHours(8 + Math.floor(startSlotIdx / 2), (startSlotIdx % 2) * 30);
-        const endTime = new Date(date);
-        endTime.setHours(8 + Math.floor(endSlotIdx / 2), (endSlotIdx % 2) * 30);
-        bookings[room.id].push({
-          id: `mock-bk-${room.id}-${dayIdx}-${startSlotIdx}`,
-          roomId: room.id,
-          userId: 'user-001',
-          title: ['周会', '评审', '讨论', '培训', '面试'][Math.floor(Math.random() * 5)] + (dayIdx + startSlotIdx),
-          startTime: startTime.toISOString(),
-          endTime: endTime.toISOString(),
-          attendeeCount: Math.floor(Math.random() * 10) + 3,
-          requiredDeviceIds: [],
-          status: 'locked',
-          createdAt: new Date().toISOString(),
-        });
-      }
-    });
-  });
-  return bookings;
-};
 
 interface BookingFormData {
   room: MeetingRoom | null;
@@ -193,27 +155,22 @@ export default function Booking() {
 
   useEffect(() => {
     const loadData = async () => {
-      try {
-        setLoading(true);
-        const roomsRes = await roomService.getRooms({ pageSize: 50 });
-        const loadedRooms: MeetingRoom[] =
-          roomsRes?.items?.length > 0 ? roomsRes.items : MOCK_ROOMS;
-        setRooms(loadedRooms);
-        setRoomBookings(generateMockBookings(loadedRooms, weekDates));
-        if (loadedRooms.length > 0) {
-          setSelectedRoomId(loadedRooms[0].id);
-        }
-      } finally {
-        setLoading(false);
+      setLoading(true);
+      const roomsRes = await roomService.getRooms({ pageSize: 50 });
+      const loadedRooms: MeetingRoom[] =
+        roomsRes.ok && roomsRes.data ? roomsRes.data.items : [];
+      setRooms(loadedRooms);
+      setRoomBookings({});
+      if (loadedRooms.length > 0) {
+        setSelectedRoomId(loadedRooms[0].id);
       }
+      setLoading(false);
     };
     loadData();
   }, []);
 
   useEffect(() => {
-    if (rooms.length > 0) {
-      setRoomBookings(generateMockBookings(rooms, weekDates));
-    }
+    setRoomBookings({});
   }, [weekOffset, rooms]);
 
   useEffect(() => {
@@ -227,36 +184,25 @@ export default function Booking() {
         setConflicts([]);
         return;
       }
-      try {
-        setCheckingConflict(true);
-        const result = await bookingService.checkConflicts({
-          roomId: formData.room.id,
-          startTime: formData.startTime.toISOString(),
-          endTime: formData.endTime.toISOString(),
-          requiredDeviceIds: formData.requiredDevices,
-        });
-        setConflicts(result || []);
-      } catch {
-        const rb = roomBookings[formData.room.id] || [];
-        const hasConflict = rb.some((b) => {
-          const bs = new Date(b.startTime).getTime();
-          const be = new Date(b.endTime).getTime();
-          const fs = formData.startTime!.getTime();
-          const fe = formData.endTime!.getTime();
-          return fs < be && fe > bs;
-        });
-        setConflicts(
-          hasConflict
-            ? [{ type: 'time', roomName: formData.room!.name } as BookingConflict]
-            : [],
-        );
-      } finally {
-        setCheckingConflict(false);
+      setCheckingConflict(true);
+      const result = await bookingService.checkConflicts({
+        roomId: formData.room.id,
+        startTime: formData.startTime.toISOString(),
+        endTime: formData.endTime.toISOString(),
+        requiredDeviceIds: formData.requiredDevices,
+      });
+      if (result.ok) {
+        setConflicts(result.data || []);
+      } else if (result.status === 409) {
+        setConflicts((result.conflicts as BookingConflict[]) || []);
+      } else {
+        setConflicts([]);
       }
+      setCheckingConflict(false);
     };
     const timer = setTimeout(checkConflicts, 300);
     return () => clearTimeout(timer);
-  }, [formData.room, formData.startTime, formData.endTime, formData.requiredDevices, roomBookings]);
+  }, [formData.room, formData.startTime, formData.endTime, formData.requiredDevices]);
 
   const toggleDeviceFilter = (device: string) => {
     setDeviceFilter((prev) =>
@@ -307,19 +253,11 @@ export default function Booking() {
     return Object.keys(errors).length === 0;
   };
 
-  const hasDeviceConflicts = conflicts.some((c) => c.type === 'device');
-
   const validateStep2 = (): boolean => {
     const errors: Record<string, string> = {};
     if (!formData.title.trim()) errors.title = '请输入会议主题';
     if (conflicts.length > 0) {
-      const hasTimeConflict = conflicts.some((c) => c.type === 'time');
-      if (hasDeviceConflicts) {
-        return false;
-      }
-      if (hasTimeConflict) {
-        errors.conflict = '存在时间冲突，请调整时间';
-      }
+      return false;
     }
     setFormErrors({ ...formErrors, ...errors });
     return Object.keys(errors).length === 0;
@@ -337,34 +275,56 @@ export default function Booking() {
 
   const handleSubmit = async () => {
     if (!validateStep2()) return;
-    try {
-      setGlobalLoading(true);
-      const result = await bookingService.createBooking({
-        roomId: formData.room!.id,
-        title: formData.title,
-        startTime: formData.startTime!.toISOString(),
-        endTime: formData.endTime!.toISOString(),
-        attendeeCount: formData.attendeeCount,
-        requiredDeviceIds: formData.requiredDevices,
-      });
-      if (result?.status === 'pending_approval') {
+    setGlobalLoading(true);
+    const result = await bookingService.createBooking({
+      roomId: formData.room!.id,
+      title: formData.title,
+      startTime: formData.startTime!.toISOString(),
+      endTime: formData.endTime!.toISOString(),
+      attendeeCount: formData.attendeeCount,
+      requiredDeviceIds: formData.requiredDevices,
+    });
+    if (result.ok && result.data) {
+      const booking = result.data;
+      if (booking.status === 'pending_approval') {
         addToast({
           type: 'warning',
           message: '已提交主管审批，审批通过后生效',
           duration: 5000,
         });
-      } else if (result?.status === 'locked') {
+      } else if (booking.status === 'locked') {
         addToast({ type: 'success', message: '预订成功，会议室已锁定' });
+      } else {
+        addToast({ type: 'success', message: '预订成功' });
       }
       setBookingModalOpen(false);
-      if (result?.id) {
-        navigate(`/bookings/${result.id}`);
+      if (booking.id) {
+        navigate(`/bookings/${booking.id}`);
       }
-    } catch {
-      addToast({ type: 'error', message: '预订失败，请调整后重试' });
-    } finally {
-      setGlobalLoading(false);
+    } else if (result.status === 409) {
+      const conflictList = (result.conflicts as BookingConflict[]) || [];
+      const deviceNames = conflictList
+        .filter((c) => c.type === 'device')
+        .map((c) => c.deviceName || (c as any).deviceId || '未知')
+        .filter(Boolean);
+      addToast({
+        type: 'warning',
+        message:
+          '存在冲突，请调整后重试：' +
+          (deviceNames.length > 0 ? `设备 ${deviceNames.join('、')} 已被占用` : result.message || '存在冲突'),
+      });
+    } else if (result.status === 403) {
+      addToast({
+        type: 'warning',
+        message: result.message || '信用分不足，暂不可预订',
+      });
+    } else {
+      addToast({
+        type: 'error',
+        message: result.message || '预订失败，请调整后重试',
+      });
     }
+    setGlobalLoading(false);
   };
 
   const getSlotBooking = (roomId: string, date: Date, slotIdx: number): Booking | null => {
@@ -796,8 +756,16 @@ export default function Booking() {
                 <Button
                   onClick={handleSubmit}
                   rightIcon={duration > 2 ? <FileCheck className="w-4 h-4" /> : <Check className="w-4 h-4" />}
-                  disabled={isCreditInsufficient || hasDeviceConflicts}
-                  title={isCreditInsufficient ? '您的信用分不足，暂不可预订' : hasDeviceConflicts ? '存在设备冲突，请调整后再提交' : undefined}
+                  disabled={isCreditInsufficient || conflicts.length > 0 || checkingConflict}
+                  title={
+                    isCreditInsufficient
+                      ? '您的信用分不足，暂不可预订'
+                      : checkingConflict
+                      ? '正在检测冲突...'
+                      : conflicts.length > 0
+                      ? '存在冲突，请调整后再提交'
+                      : undefined
+                  }
                 >
                   {duration > 2 ? '提交审批' : '确认预订'}
                 </Button>
@@ -1031,47 +999,45 @@ export default function Booking() {
                     正在检测冲突...
                   </div>
                 ) : conflicts.length > 0 ? (
-                  <div className="rounded-xl border border-danger-200 bg-danger-50 p-3">
-                    <div className="flex items-start gap-2">
-                      <AlertTriangle className="w-5 h-5 text-danger-500 shrink-0 mt-0.5" />
-                      <div className="space-y-2">
-                        {conflicts.some((c) => c.type === 'time') && (
-                          <div>
-                            <p className="text-sm font-medium text-danger-700">存在时间冲突</p>
-                            <p className="text-xs text-danger-600 mt-0.5">
-                              所选时段已有预约，请调整时间
+                  <div className="space-y-2">
+                    {conflicts.map((c, idx) => {
+                      if (c.type === 'device') {
+                        const deviceLabel =
+                          DEVICE_OPTIONS.find((d) => d.value === c.deviceName)?.label ||
+                          c.deviceName ||
+                          (c as any).deviceId ||
+                          '未知';
+                        const conflictTimeRaw =
+                          (c as any).conflictTime || (c as any).startTime || c.conflictingBookingId
+                            ? Object.values(roomBookings)
+                                .flat()
+                                .find((b) => b.id === c.conflictingBookingId)?.startTime
+                            : null;
+                        const conflictTimeStr = conflictTimeRaw
+                          ? formatTime(conflictTimeRaw)
+                          : '该时段';
+                        return (
+                          <div
+                            key={`device-${idx}`}
+                            className="rounded-xl border border-orange-200 bg-orange-50 p-3"
+                          >
+                            <p className="text-sm font-medium text-orange-700">
+                              ⚠️ 设备「{deviceLabel}」已在 {conflictTimeStr} 被占用，请更换设备或调整时间
                             </p>
                           </div>
-                        )}
-                        {conflicts
-                          .filter((c) => c.type === 'device')
-                          .map((c, idx) => {
-                            const deviceLabel = DEVICE_OPTIONS.find(
-                              (d) => d.value === c.deviceName,
-                            )?.label;
-                            const conflictingBooking = c.conflictingBookingId
-                              ? Object.values(roomBookings).flat().find((b) => b.id === c.conflictingBookingId)
-                              : null;
-                            const conflictTime = conflictingBooking
-                              ? `${formatDate(conflictingBooking.startTime)} ${formatTime(conflictingBooking.startTime)}`
-                              : '该时段';
-                            return (
-                              <div key={`device-${idx}`}>
-                                <p className="text-sm font-medium text-danger-700">
-                                  存在设备冲突
-                                </p>
-                                <p className="text-xs text-danger-600 mt-0.5">
-                                  设备
-                                  <span className="font-medium">
-                                    『{deviceLabel || c.deviceName || '未知设备'}』
-                                  </span>
-                                  已在 {conflictTime} 被占用
-                                </p>
-                              </div>
-                            );
-                          })}
-                      </div>
-                    </div>
+                        );
+                      }
+                      return (
+                        <div
+                          key={`time-${idx}`}
+                          className="rounded-xl border border-danger-200 bg-danger-50 p-3"
+                        >
+                          <p className="text-sm font-medium text-danger-700">
+                            🕐 会议室「{c.roomName || formData.room?.name || ''}」与现有会议时间冲突
+                          </p>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : formData.startTime && formData.endTime && formData.room ? (
                   <div className="rounded-xl border border-success-200 bg-success-50 p-3">

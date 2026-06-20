@@ -29,68 +29,7 @@ import {
   Wrench,
 } from 'lucide-react';
 
-const mockRooms: MeetingRoom[] = [
-  {
-    id: 'room-001',
-    name: '星辰会议室',
-    floor: '3F',
-    capacity: 15,
-    equipmentIds: ['dev-001', 'dev-003', 'dev-006'],
-    status: 'active',
-    image: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=600',
-    description: '配备高清投影和视频会议系统，适合部门级会议和客户演示',
-  },
-  {
-    id: 'room-002',
-    name: '云端会议室',
-    floor: '3F',
-    capacity: 10,
-    equipmentIds: ['dev-002', 'dev-004'],
-    status: 'active',
-    image: 'https://images.unsplash.com/photo-1431540015086-74536936ecd?w=600',
-    description: '舒适的空间，适合小组讨论和头脑风暴',
-  },
-  {
-    id: 'room-003',
-    name: '绿洲会议室',
-    floor: '5F',
-    capacity: 8,
-    equipmentIds: ['dev-004', 'dev-005'],
-    status: 'maintenance',
-    image: 'https://images.unsplash.com/photo-1462826303086-3d920a6fcfc2?w=600',
-    description: '自然采光良好，适合创意类会议',
-  },
-  {
-    id: 'room-004',
-    name: '创智报告厅',
-    floor: '1F',
-    capacity: 50,
-    equipmentIds: ['dev-001', 'dev-002', 'dev-003', 'dev-006'],
-    status: 'active',
-    image: 'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=600',
-    description: '大型报告厅，适合全员大会、培训和重要活动',
-  },
-  {
-    id: 'room-005',
-    name: '灵感站',
-    floor: '2F',
-    capacity: 6,
-    equipmentIds: ['dev-004'],
-    status: 'active',
-    image: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=600',
-    description: '开放式讨论空间，激发创意灵感',
-  },
-  {
-    id: 'room-006',
-    name: '决策室',
-    floor: '6F',
-    capacity: 12,
-    equipmentIds: ['dev-001', 'dev-002', 'dev-003'],
-    status: 'disabled',
-    image: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=600',
-    description: '高管决策专用会议室',
-  },
-];
+
 
 const equipmentOptions = [
   { value: 'dev-001', label: '投影仪', icon: Projector },
@@ -166,11 +105,11 @@ export default function MeetingRoomManage() {
 
   async function loadRooms() {
     setLoading(true);
-    try {
-      const res = await roomService.getRooms({ pageSize: 100 });
-      setRooms(res.items.length > 0 ? res.items : mockRooms);
-    } catch {
-      setRooms(mockRooms);
+    const res = await roomService.getRooms({ pageSize: 100 });
+    if (res.ok && res.data) {
+      setRooms(res.data.items);
+    } else {
+      setRooms([]);
     }
     setLoading(false);
   }
@@ -231,58 +170,42 @@ export default function MeetingRoomManage() {
       description: formData.description,
       image: formData.image,
     };
-    try {
-      if (isEditing && formData.id) {
-        await roomService.updateRoom(formData.id, payload);
-        addToast({ type: 'success', message: '会议室已更新' });
-      } else {
-        await roomService.createRoom(payload);
-        addToast({ type: 'success', message: '会议室已创建' });
-      }
+    let result;
+    if (isEditing && formData.id) {
+      result = await roomService.updateRoom(formData.id, payload);
+    } else {
+      result = await roomService.createRoom(payload);
+    }
+    if (result.ok) {
+      addToast({ type: 'success', message: `会议室已${isEditing ? '更新' : '创建'}` });
       await loadRooms();
       setFormModalOpen(false);
-    } catch {
-      addToast({ type: 'info', message: `模拟：${isEditing ? '已更新' : '已创建'}会议室` });
-      if (isEditing && formData.id) {
-        setRooms((prev) =>
-          prev.map((r) =>
-            r.id === formData.id ? { ...r, ...payload } : r
-          )
-        );
-      } else {
-        const newRoom: MeetingRoom = {
-          id: `room-${Date.now()}`,
-          ...payload,
-        };
-        setRooms((prev) => [...prev, newRoom]);
-      }
-      setFormModalOpen(false);
+    } else {
+      addToast({ type: 'error', message: result.message || `${isEditing ? '更新' : '创建'}失败` });
     }
     setSubmitting(false);
   }
 
   async function handleToggleStatus(room: MeetingRoom) {
     const newStatus: RoomStatus = room.status === 'active' ? 'disabled' : 'active';
-    try {
-      await roomService.updateRoomStatus(room.id, newStatus);
+    const result = await roomService.updateRoomStatus(room.id, newStatus);
+    if (result.ok) {
       addToast({ type: 'success', message: `状态已${newStatus === 'active' ? '启用' : '停用'}` });
-    } catch {
-      addToast({ type: 'info', message: `模拟：状态已${newStatus === 'active' ? '启用' : '停用'}` });
+      await loadRooms();
+    } else {
+      addToast({ type: 'error', message: result.message || '操作失败' });
     }
-    setRooms((prev) =>
-      prev.map((r) => (r.id === room.id ? { ...r, status: newStatus } : r))
-    );
   }
 
   async function handleDeleteConfirm() {
     if (!deletingRoom) return;
-    try {
-      await roomService.deleteRoom(deletingRoom.id);
+    const result = await roomService.deleteRoom(deletingRoom.id);
+    if (result.ok) {
       addToast({ type: 'success', message: '会议室已删除' });
-    } catch {
-      addToast({ type: 'info', message: '模拟：会议室已删除' });
+      await loadRooms();
+    } else {
+      addToast({ type: 'error', message: result.message || '删除失败' });
     }
-    setRooms((prev) => prev.filter((r) => r.id !== deletingRoom.id));
     setDeleteModalOpen(false);
     setDeletingRoom(null);
   }

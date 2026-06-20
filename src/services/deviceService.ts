@@ -1,5 +1,6 @@
 import { api } from './api';
 import type { Device, DeviceStatus, DeviceType } from '../types';
+import type { ApiResult } from './api';
 
 export interface CreateDeviceRequest {
   name: string;
@@ -24,32 +25,34 @@ export interface DevicesListResponse {
 }
 
 export const deviceService = {
-  getDevices: (params?: GetDevicesQuery) =>
+  getDevices: (params?: GetDevicesQuery): Promise<ApiResult<DevicesListResponse>> =>
     api.get<DevicesListResponse>('/devices', { params }),
 
-  getDevice: (id: string) => api.get<Device>(`/devices/${id}`),
+  getDevice: (id: string): Promise<ApiResult<Device>> =>
+    api.get<Device>(`/devices/${id}`),
 
-  createDevice: (data: CreateDeviceRequest) =>
+  createDevice: (data: CreateDeviceRequest): Promise<ApiResult<Device>> =>
     api.post<Device>('/devices', data),
 
-  updateDevice: (id: string, data: Partial<CreateDeviceRequest>) =>
+  updateDevice: (id: string, data: Partial<CreateDeviceRequest>): Promise<ApiResult<Device>> =>
     api.put<Device>(`/devices/${id}`, data),
 
-  deleteDevice: (id: string) => api.delete<void>(`/devices/${id}`),
+  deleteDevice: (id: string): Promise<ApiResult<void>> =>
+    api.delete<void>(`/devices/${id}`),
 
-  updateDeviceStatus: (id: string, status: DeviceStatus) =>
+  updateDeviceStatus: (id: string, status: DeviceStatus): Promise<ApiResult<Device>> =>
     api.patch<Device>(`/devices/${id}/status`, { status }),
 
-  assignToRoom: (deviceId: string, roomId: string) =>
+  assignToRoom: (deviceId: string, roomId: string): Promise<ApiResult<Device>> =>
     api.post<Device>(`/devices/${deviceId}/assign`, { roomId }),
 
-  unassignFromRoom: (deviceId: string) =>
+  unassignFromRoom: (deviceId: string): Promise<ApiResult<Device>> =>
     api.post<Device>(`/devices/${deviceId}/unassign`),
 
-  scheduleMaintenance: (id: string, scheduledDate: string, type: 'preventive' | 'corrective') =>
+  scheduleMaintenance: (id: string, scheduledDate: string, type: 'preventive' | 'corrective'): Promise<ApiResult<void>> =>
     api.post<void>(`/devices/${id}/maintenance`, { scheduledDate, type }),
 
-  getMaintenanceHistory: (id: string) =>
+  getMaintenanceHistory: (id: string): Promise<ApiResult<unknown[]>> =>
     api.get<unknown[]>(`/devices/${id}/maintenance-history`),
 };
 

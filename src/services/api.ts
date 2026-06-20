@@ -8,6 +8,14 @@ export interface RequestConfig extends RequestInit {
   skipAuth?: boolean;
 }
 
+export interface ApiResult<T> {
+  ok: boolean;
+  status: number;
+  data: T | null;
+  message?: string;
+  conflicts?: any[];
+}
+
 function buildQueryString(params: Record<string, any>): string {
   const searchParams = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -24,7 +32,7 @@ function getToken(): string | null {
   return localStorage.getItem('token');
 }
 
-async function request<T>(url: string, config: RequestConfig = {}): Promise<T> {
+async function request<T>(url: string, config: RequestConfig = {}): Promise<ApiResult<T>> {
   const { params, skipAuth, headers: customHeaders, ...rest } = config;
 
   let fullUrl = `${BASE_URL}${url}`;
@@ -51,33 +59,85 @@ async function request<T>(url: string, config: RequestConfig = {}): Promise<T> {
       headers,
     });
 
-    if (!response.ok) {
-      if (response.status === 401) {
-        useAppStore.getState().logout();
-        window.location.href = '/login';
+    if (response.status === 401) {
+      useAppStore.getState().logout();
+      window.location.href = '/login';
+      return {
+        ok: false,
+        status: 401,
+        data: null,
+        message: '未授权，请重新登录',
+      };
+    }
+
+    let parsed: any = null;
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      try {
+        parsed = await response.json();
+      } catch {
+        parsed = null;
       }
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
-    const result = (await response.json()) as ApiResponse<T>;
-
-    if (result.code !== 200 && result.code !== 0) {
-      useAppStore.getState().addToast({
-        type: 'error',
-        message: result.message || '请求失败',
-      });
-      throw new Error(result.message || '请求失败');
+    if (response.ok) {
+      const result = parsed as ApiResponse<T>;
+      if (result && (result.code === 200 || result.code === 0)) {
+        return {
+          ok: true,
+          status: response.status,
+          data: result.data,
+        };
+      } else {
+        return {
+          ok: false,
+          status: 200,
+          data: null,
+          message: result?.message || '请求失败',
+        };
+      }
     }
 
-    return result.data;
+    if (response.status === 403) {
+      return {
+        ok: false,
+        status: 403,
+        data: null,
+        message: parsed?.message || '权限不足',
+      };
+    }
+
+    if (response.status === 409) {
+      return {
+        ok: false,
+        status: 409,
+        data: null,
+        conflicts: parsed?.conflicts || (parsed?.data?.conflicts ? parsed.data.conflicts : (parsed?.data ? [parsed.data] : undefined)),
+        message: parsed?.message || '存在冲突',
+      };
+    }
+
+    return {
+      ok: false,
+      status: response.status,
+      data: null,
+      message: '服务器错误',
+    };
   } catch (error) {
     if (error instanceof Error && error.name === 'TypeError') {
-      useAppStore.getState().addToast({
-        type: 'error',
-        message: '网络连接失败，请检查网络',
-      });
+      return {
+        ok: false,
+        status: 0,
+        data: null,
+        message: '网络连接失败',
+      };
     }
-    throw error;
+    return {
+      ok: false,
+      status: 0,
+      data: null,
+      message: error instanceof Error ? error.message : '请求异常',
+    };
   }
 }
 

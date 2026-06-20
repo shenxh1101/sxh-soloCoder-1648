@@ -1,5 +1,6 @@
 import { api } from './api';
 import type { Booking, BookingConflict } from '../types';
+import type { ApiResult } from './api';
 
 export interface CreateBookingRequest {
   roomId: string;
@@ -28,27 +29,31 @@ export interface BookingsListResponse {
 }
 
 export const bookingService = {
-  getBookings: (params?: GetBookingsQuery) =>
+  getBookings: (params?: GetBookingsQuery): Promise<ApiResult<BookingsListResponse>> =>
     api.get<BookingsListResponse>('/bookings', { params }),
 
-  getBooking: (id: string) => api.get<Booking>(`/bookings/${id}`),
+  getBooking: (id: string): Promise<ApiResult<Booking>> =>
+    api.get<Booking>(`/bookings/${id}`),
 
-  createBooking: (data: CreateBookingRequest) =>
+  createBooking: (data: CreateBookingRequest): Promise<ApiResult<Booking>> =>
     api.post<Booking>('/bookings', data),
 
-  updateBooking: (id: string, data: Partial<CreateBookingRequest>) =>
+  updateBooking: (id: string, data: Partial<CreateBookingRequest>): Promise<ApiResult<Booking>> =>
     api.put<Booking>(`/bookings/${id}`, data),
 
-  cancelBooking: (id: string) => api.post<void>(`/bookings/${id}/cancel`),
+  cancelBooking: (id: string): Promise<ApiResult<void>> =>
+    api.post<void>(`/bookings/${id}/cancel`),
 
-  checkIn: (id: string) => api.post<void>(`/bookings/${id}/check-in`),
+  checkIn: (id: string): Promise<ApiResult<void>> =>
+    api.post<void>(`/bookings/${id}/check-in`),
 
-  release: (id: string) => api.post<void>(`/bookings/${id}/release`),
+  release: (id: string): Promise<ApiResult<void>> =>
+    api.post<void>(`/bookings/${id}/release`),
 
-  checkConflicts: (data: Omit<CreateBookingRequest, 'title' | 'attendeeCount'>) =>
+  checkConflicts: (data: Omit<CreateBookingRequest, 'title' | 'attendeeCount'>): Promise<ApiResult<BookingConflict[]>> =>
     api.post<BookingConflict[]>('/bookings/check-conflicts', data),
 
-  getMyBookings: (params?: GetBookingsQuery) =>
+  getMyBookings: (params?: GetBookingsQuery): Promise<ApiResult<BookingsListResponse>> =>
     api.get<BookingsListResponse>('/bookings', {
       params: { ...(params || {}), mine: 'true' },
     }),

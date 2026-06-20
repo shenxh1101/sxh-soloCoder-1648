@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CalendarClock,
@@ -29,8 +29,9 @@ import Button from '../components/common/Button';
 import Badge from '../components/common/Badge';
 import { bookingService } from '../services/bookingService';
 import { statisticsService } from '../services/statisticsService';
+import { roomService } from '../services/roomService';
 import { useAuth, useUi } from '../store';
-import type { Booking, BookingStatus } from '../types';
+import type { Booking, BookingStatus, MeetingRoom } from '../types';
 import {
   formatTime,
   formatDate,
@@ -38,108 +39,6 @@ import {
   bookingStatusLabel,
   cn,
 } from '../utils';
-
-const MOCK_BOOKINGS: Booking[] = [
-  {
-    id: 'bk-001',
-    roomId: 'room-001',
-    userId: 'user-001',
-    title: 'Q2产品规划评审会',
-    startTime: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-    endTime: new Date(Date.now() + 90 * 60 * 1000).toISOString(),
-    attendeeCount: 8,
-    requiredDeviceIds: ['dev-001', 'dev-003'],
-    status: 'locked',
-    checkInTime: undefined,
-    approvalManagerId: undefined,
-    approvalTime: undefined,
-    approvalComment: undefined,
-    confirmationQr: undefined,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'bk-002',
-    roomId: 'room-002',
-    userId: 'user-001',
-    title: '前端技术周会',
-    startTime: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
-    endTime: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
-    attendeeCount: 6,
-    requiredDeviceIds: ['dev-002'],
-    status: 'locked',
-    checkInTime: undefined,
-    approvalManagerId: undefined,
-    approvalTime: undefined,
-    approvalComment: undefined,
-    confirmationQr: undefined,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'bk-003',
-    roomId: 'room-003',
-    userId: 'user-001',
-    title: '客户需求沟通会',
-    startTime: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    endTime: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-    attendeeCount: 12,
-    requiredDeviceIds: ['dev-001', 'dev-004'],
-    status: 'completed',
-    checkInTime: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    approvalManagerId: undefined,
-    approvalTime: undefined,
-    approvalComment: undefined,
-    confirmationQr: undefined,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'bk-004',
-    roomId: 'room-001',
-    userId: 'user-001',
-    title: '跨部门协作会议',
-    startTime: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-    endTime: new Date(Date.now() - 4.5 * 60 * 60 * 1000).toISOString(),
-    attendeeCount: 15,
-    requiredDeviceIds: ['dev-001'],
-    status: 'released',
-    checkInTime: undefined,
-    approvalManagerId: undefined,
-    approvalTime: undefined,
-    approvalComment: undefined,
-    confirmationQr: undefined,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'bk-005',
-    roomId: 'room-005',
-    userId: 'user-001',
-    title: '季度战略规划会（需要审批）',
-    startTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-    endTime: new Date(Date.now() + 27 * 60 * 60 * 1000).toISOString(),
-    attendeeCount: 20,
-    requiredDeviceIds: ['dev-001', 'dev-002', 'dev-003', 'dev-004'],
-    status: 'pending_approval',
-    checkInTime: undefined,
-    approvalManagerId: 'user-002',
-    approvalTime: undefined,
-    approvalComment: undefined,
-    confirmationQr: undefined,
-    createdAt: new Date().toISOString(),
-  },
-];
-
-const MOCK_ROOMS: Record<string, string> = {
-  'room-001': '星河会议厅',
-  'room-002': '创新实验室',
-  'room-003': '阳光会议室',
-  'room-004': '头脑风暴室',
-  'room-005': '董事会议室',
-};
-
-const MOCK_ROOM_USAGE = [
-  { roomId: 'room-001', roomName: '星河会议厅', bookingCount: 28, usageHours: 56, averageUsageRate: 85 },
-  { roomId: 'room-002', roomName: '创新实验室', bookingCount: 22, usageHours: 44, averageUsageRate: 72 },
-  { roomId: 'room-003', roomName: '阳光会议室', bookingCount: 19, usageHours: 38, averageUsageRate: 65 },
-];
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -151,16 +50,16 @@ function getGreeting() {
 }
 
 const statusColorMap: Record<BookingStatus, string> = {
-  locked: 'bg-success-500',
-  completed: 'bg-gray-400',
-  released: 'bg-danger-500',
-  pending_approval: 'bg-warning-500',
-  cancelled: 'bg-gray-300',
-  rejected: 'bg-danger-600',
+  locked: '#3B82F6',
+  completed: '#9CA3AF',
+  released: '#EF4444',
+  pending_approval: '#F59E0B',
+  cancelled: '#D1D5DB',
+  rejected: '#DC2626',
 };
 
 const statusBadgeVariant: Record<BookingStatus, 'success' | 'default' | 'danger' | 'warning' | 'info'> = {
-  locked: 'success',
+  locked: 'info',
   completed: 'default',
   released: 'danger',
   pending_approval: 'warning',
@@ -169,13 +68,21 @@ const statusBadgeVariant: Record<BookingStatus, 'success' | 'default' | 'danger'
 };
 
 const bookingBorderColor: Record<BookingStatus, string> = {
-  locked: '#10B981',
+  locked: '#3B82F6',
   completed: '#9CA3AF',
   released: '#EF4444',
   pending_approval: '#F59E0B',
   cancelled: '#D1D5DB',
   rejected: '#DC2626',
 };
+
+interface RoomUsageStat {
+  roomId: string;
+  roomName: string;
+  bookingCount: number;
+  usageHours: number;
+  averageUsageRate: number;
+}
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -184,80 +91,94 @@ export default function Dashboard() {
 
   const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [rooms, setRooms] = useState<MeetingRoom[]>([]);
   const [stats, setStats] = useState({
     todayBookings: 0,
     upcoming: 0,
     creditScore: user?.creditScore ?? 95,
     monthlyBookings: 0,
     pendingApprovals: 0,
-    roomUsage: MOCK_ROOM_USAGE,
+    roomUsage: [] as RoomUsageStat[],
   });
 
   const greeting = getGreeting();
   const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
 
+  const roomMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    rooms.forEach((r) => {
+      map[r.id] = r.name;
+    });
+    return map;
+  }, [rooms]);
+
   useEffect(() => {
     const loadData = async () => {
-      try {
-        setLoading(true);
-        const now = new Date();
-        const thirtyMinutesLater = new Date(now.getTime() + 30 * 60 * 1000);
+      setLoading(true);
 
-        const [bookingsRes, statsRes, rankingRes] = await Promise.allSettled([
-          bookingService.getMyBookings({ pageSize: 20 }),
-          statisticsService.getOverview(),
-          statisticsService.getRoomUsageRanking(undefined, undefined, 3),
-        ]);
-
-        let loadedBookings: Booking[] = MOCK_BOOKINGS;
-        if (bookingsRes.status === 'fulfilled') {
-          loadedBookings = bookingsRes.value.items.length > 0 ? bookingsRes.value.items : MOCK_BOOKINGS;
-        }
-        loadedBookings = loadedBookings.sort(
-          (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
-        );
-        setBookings(loadedBookings);
-
-        const nowMs = now.getTime();
-        const upcomingCount = loadedBookings.filter((b) => {
-          const startMs = new Date(b.startTime).getTime();
-          return startMs >= nowMs && startMs <= thirtyMinutesLater.getTime() && b.status === 'locked';
-        }).length;
-
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-        const todayBookingsCount = loadedBookings.filter(
-          (b) => formatDate(b.startTime) === formatDate(now),
-        ).length;
-
-        const monthlyCount = loadedBookings.filter(
-          (b) => new Date(b.startTime).toISOString() >= monthStart,
-        ).length;
-
-        if (statsRes.status === 'fulfilled') {
-          const s = statsRes.value;
-          setStats({
-            todayBookings: s.totalBookings > 0 ? todayBookingsCount : 3,
-            upcoming: upcomingCount > 0 ? upcomingCount : 1,
-            creditScore: user?.creditScore ?? (s.averageUsageRate > 0 ? s.averageUsageRate : 95),
-            monthlyBookings: s.totalBookings > 0 ? monthlyCount : 8,
-            pendingApprovals: s.pendingApprovals ?? 2,
-            roomUsage: rankingRes.status === 'fulfilled' && rankingRes.value.length > 0
-              ? rankingRes.value
-              : MOCK_ROOM_USAGE,
-          });
-        } else {
-          setStats({
-            todayBookings: todayBookingsCount || 3,
-            upcoming: upcomingCount || 1,
-            creditScore: user?.creditScore ?? 95,
-            monthlyBookings: monthlyCount || 8,
-            pendingApprovals: 2,
-            roomUsage: MOCK_ROOM_USAGE,
-          });
-        }
-      } finally {
-        setLoading(false);
+      const roomsRes = await roomService.getRooms({ pageSize: 100 });
+      if (roomsRes.ok && roomsRes.data) {
+        setRooms(roomsRes.data.items);
+      } else {
+        setRooms([]);
       }
+
+      let loadedBookings: Booking[] = [];
+      const bookingsResult = await bookingService.getMyBookings({ pageSize: 20 });
+      if (bookingsResult.ok && bookingsResult.data) {
+        loadedBookings = bookingsResult.data.items;
+      }
+      loadedBookings = loadedBookings.sort(
+        (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
+      );
+      setBookings(loadedBookings);
+
+      const now = new Date();
+      const nowMs = now.getTime();
+      const thirtyMinutesLater = new Date(nowMs + 30 * 60 * 1000);
+
+      const upcomingCount = loadedBookings.filter((b) => {
+        const startMs = new Date(b.startTime).getTime();
+        return startMs >= nowMs && startMs <= thirtyMinutesLater.getTime() && b.status === 'locked';
+      }).length;
+
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const todayBookingsCount = loadedBookings.filter(
+        (b) => formatDate(b.startTime) === formatDate(now),
+      ).length;
+
+      const monthlyCount = loadedBookings.filter(
+        (b) => new Date(b.startTime).toISOString() >= monthStart,
+      ).length;
+
+      let pendingApprovals = 0;
+      let creditScore = user?.creditScore ?? 95;
+      const roomUsageData: RoomUsageStat[] = [];
+
+      const statsResult = await statisticsService.getOverview();
+      if (statsResult.ok && statsResult.data) {
+        const s = statsResult.data;
+        pendingApprovals = s.pendingApprovals ?? 0;
+        if (s.averageUsageRate > 0 && !user?.creditScore) {
+          creditScore = s.averageUsageRate;
+        }
+      }
+
+      const rankingResult = await statisticsService.getRoomUsageRanking(undefined, undefined, 3);
+      if (rankingResult.ok && rankingResult.data) {
+        roomUsageData.push(...rankingResult.data);
+      }
+
+      setStats({
+        todayBookings: todayBookingsCount,
+        upcoming: upcomingCount,
+        creditScore: user?.creditScore ?? creditScore,
+        monthlyBookings: monthlyCount,
+        pendingApprovals,
+        roomUsage: roomUsageData,
+      });
+
+      setLoading(false);
     };
 
     loadData();
@@ -266,12 +187,13 @@ export default function Dashboard() {
   const handleCheckIn = async (bookingId: string) => {
     try {
       setGlobalLoading(true);
-      await bookingService.checkIn(bookingId);
-      setBookings((prev) => prev.map((b) => (b.id === bookingId ? { ...b, checkInTime: new Date().toISOString() } : b)));
-      addToast({ type: 'success', message: '签到成功！' });
-    } catch {
-      setBookings((prev) => prev.map((b) => (b.id === bookingId ? { ...b, checkInTime: new Date().toISOString() } : b)));
-      addToast({ type: 'success', message: '签到成功！（Mock）' });
+      const result = await bookingService.checkIn(bookingId);
+      if (result.ok) {
+        setBookings((prev) => prev.map((b) => (b.id === bookingId ? { ...b, checkInTime: new Date().toISOString() } : b)));
+        addToast({ type: 'success', message: '签到成功！' });
+      } else {
+        addToast({ type: 'error', message: result.message || '签到失败' });
+      }
     } finally {
       setGlobalLoading(false);
     }
@@ -280,18 +202,19 @@ export default function Dashboard() {
   const handleCancel = async (bookingId: string) => {
     try {
       setGlobalLoading(true);
-      await bookingService.cancelBooking(bookingId);
-      setBookings((prev) => prev.map((b) => (b.id === bookingId ? { ...b, status: 'cancelled' as BookingStatus } : b)));
-      addToast({ type: 'info', message: '预订已取消' });
-    } catch {
-      setBookings((prev) => prev.map((b) => (b.id === bookingId ? { ...b, status: 'cancelled' as BookingStatus } : b)));
-      addToast({ type: 'info', message: '预订已取消（Mock）' });
+      const result = await bookingService.cancelBooking(bookingId);
+      if (result.ok) {
+        setBookings((prev) => prev.map((b) => (b.id === bookingId ? { ...b, status: 'cancelled' as BookingStatus } : b)));
+        addToast({ type: 'info', message: '预订已取消' });
+      } else {
+        addToast({ type: 'error', message: result.message || '取消失败' });
+      }
     } finally {
       setGlobalLoading(false);
     }
   };
 
-  const getRoomName = (roomId: string) => MOCK_ROOMS[roomId] || `会议室 ${roomId.slice(-3)}`;
+  const getRoomName = (roomId: string) => roomMap[roomId] || `会议室 ${roomId.slice(-3)}`;
 
   const statCards = [
     {
@@ -299,9 +222,9 @@ export default function Dashboard() {
       value: stats.todayBookings,
       icon: CalendarDays,
       iconBg: 'bg-brand-50 text-brand-600',
-      trend: '+2',
-      trendUp: true,
-      trendLabel: '较昨日',
+      trend: stats.todayBookings > 0 ? `+${stats.todayBookings}` : '0',
+      trendUp: stats.todayBookings > 0,
+      trendLabel: '今日场次',
     },
     {
       label: '即将开始',
@@ -327,9 +250,9 @@ export default function Dashboard() {
       value: stats.monthlyBookings,
       icon: CalendarClock,
       iconBg: 'bg-purple-50 text-purple-600',
-      trend: '+15%',
-      trendUp: true,
-      trendLabel: '较上月',
+      trend: stats.monthlyBookings > 0 ? `共${stats.monthlyBookings}次` : '0次',
+      trendUp: stats.monthlyBookings > 0,
+      trendLabel: '本月累计',
     },
   ];
 
@@ -618,51 +541,57 @@ export default function Dashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-5">
-                  {stats.roomUsage.map((room, idx) => (
-                    <div key={room.roomId}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={cn(
-                              'w-6 h-6 rounded-lg text-xs font-bold flex items-center justify-center text-white',
-                              idx === 0
-                                ? 'bg-gradient-to-br from-amber-400 to-amber-500'
-                                : idx === 1
-                                  ? 'bg-gradient-to-br from-gray-400 to-gray-500'
-                                  : 'bg-gradient-to-br from-orange-400 to-orange-500',
-                            )}
-                          >
-                            {idx + 1}
-                          </span>
-                          <span className="font-medium text-brand-800 text-sm">
-                            {room.roomName}
+                {stats.roomUsage.length === 0 ? (
+                  <div className="py-12 text-center text-brand-400">
+                    <p className="text-sm">暂无使用率数据</p>
+                  </div>
+                ) : (
+                  <div className="space-y-5">
+                    {stats.roomUsage.map((room, idx) => (
+                      <div key={room.roomId}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={cn(
+                                'w-6 h-6 rounded-lg text-xs font-bold flex items-center justify-center text-white',
+                                idx === 0
+                                  ? 'bg-gradient-to-br from-amber-400 to-amber-500'
+                                  : idx === 1
+                                    ? 'bg-gradient-to-br from-gray-400 to-gray-500'
+                                    : 'bg-gradient-to-br from-orange-400 to-orange-500',
+                              )}
+                            >
+                              {idx + 1}
+                            </span>
+                            <span className="font-medium text-brand-800 text-sm">
+                              {room.roomName}
+                            </span>
+                          </div>
+                          <span className="text-xs font-semibold text-brand-600">
+                            {room.averageUsageRate}%
                           </span>
                         </div>
-                        <span className="text-xs font-semibold text-brand-600">
-                          {room.averageUsageRate}%
-                        </span>
+                        <div className="h-2 rounded-full bg-brand-100 overflow-hidden">
+                          <div
+                            className={cn(
+                              'h-full rounded-full transition-all duration-700 ease-out',
+                              idx === 0
+                                ? 'bg-gradient-to-r from-amber-400 to-amber-500'
+                                : idx === 1
+                                  ? 'bg-gradient-to-r from-gray-400 to-gray-500'
+                                  : 'bg-gradient-to-r from-orange-400 to-orange-500',
+                            )}
+                            style={{ width: `${room.averageUsageRate}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between mt-1.5 text-[11px] text-brand-500">
+                          <span>{room.bookingCount} 次预订</span>
+                          <span>{room.usageHours} 小时</span>
+                        </div>
                       </div>
-                      <div className="h-2 rounded-full bg-brand-100 overflow-hidden">
-                        <div
-                          className={cn(
-                            'h-full rounded-full transition-all duration-700 ease-out',
-                            idx === 0
-                              ? 'bg-gradient-to-r from-amber-400 to-amber-500'
-                              : idx === 1
-                                ? 'bg-gradient-to-r from-gray-400 to-gray-500'
-                                : 'bg-gradient-to-r from-orange-400 to-orange-500',
-                          )}
-                          style={{ width: `${room.averageUsageRate}%` }}
-                        />
-                      </div>
-                      <div className="flex justify-between mt-1.5 text-[11px] text-brand-500">
-                        <span>{room.bookingCount} 次预订</span>
-                        <span>{room.usageHours} 小时</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}

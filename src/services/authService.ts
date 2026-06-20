@@ -1,5 +1,6 @@
 import { api } from './api';
 import type { User } from '../types';
+import type { ApiResult } from './api';
 
 export interface LoginRequest {
   email: string;
@@ -19,19 +20,22 @@ export interface LoginResponse {
 }
 
 export const authService = {
-  login: (data: LoginRequest) =>
+  login: (data: LoginRequest): Promise<ApiResult<LoginResponse>> =>
     api.post<LoginResponse>('/auth/login', data, { skipAuth: true }),
 
-  register: (data: RegisterRequest) =>
+  register: (data: RegisterRequest): Promise<ApiResult<LoginResponse>> =>
     api.post<LoginResponse>('/auth/register', data, { skipAuth: true }),
 
-  logout: () => api.post<void>('/auth/logout'),
+  logout: (): Promise<ApiResult<void>> =>
+    api.post<void>('/auth/logout'),
 
-  getCurrentUser: () => api.get<User>('/auth/me'),
+  getCurrentUser: (): Promise<ApiResult<User>> =>
+    api.get<User>('/auth/me'),
 
-  updateProfile: (data: Partial<User>) => api.put<User>('/auth/profile', data),
+  updateProfile: (data: Partial<User>): Promise<ApiResult<User>> =>
+    api.put<User>('/auth/profile', data),
 
-  changePassword: (oldPassword: string, newPassword: string) =>
+  changePassword: (oldPassword: string, newPassword: string): Promise<ApiResult<void>> =>
     api.post<void>('/auth/password', { oldPassword, newPassword }),
 };
 

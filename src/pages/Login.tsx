@@ -51,22 +51,21 @@ export default function Login() {
     e.preventDefault();
     if (!validate()) return;
 
-    try {
-      setGlobalLoading(true);
-      const result = await authService.login({ email, password });
-      login(result.user, result.token);
+    setGlobalLoading(true);
+    const result = await authService.login({ email, password });
+    if (result.ok && result.data) {
+      login(result.data.user, result.data.token);
       if (remember) {
         localStorage.setItem('rememberedEmail', email);
       } else {
         localStorage.removeItem('rememberedEmail');
       }
-      addToast({ type: 'success', message: `欢迎回来，${result.user.name}！` });
+      addToast({ type: 'success', message: `欢迎回来，${result.data.user.name}！` });
       navigate('/dashboard');
-    } catch {
-      addToast({ type: 'error', message: '登录失败，请检查账号密码' });
-    } finally {
-      setGlobalLoading(false);
+    } else {
+      addToast({ type: 'error', message: result.message || '登录失败，请检查账号密码' });
     }
+    setGlobalLoading(false);
   };
 
   const fillAccount = (account: typeof TEST_ACCOUNTS[0]) => {

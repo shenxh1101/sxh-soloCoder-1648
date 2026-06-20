@@ -372,6 +372,8 @@ export default function Statistics() {
     d.setDate(d.getDate() - 1);
     return formatDate(d);
   });
+  const [timeoutVersion, setTimeoutVersion] = useState(0);
+  const [briefVersion, setBriefVersion] = useState(0);
   const [hoveredCell, setHoveredCell] = useState<{
     x: number;
     y: number;
@@ -416,19 +418,14 @@ export default function Statistics() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try {
-        const resp = await roomService.getRooms({ status: 'active', pageSize: 100 });
-        if (cancelled) return;
-        if (resp && resp.items && resp.items.length > 0) {
-          setRooms(
-            resp.items.map((r: MeetingRoom) => ({ id: r.id, name: r.name })),
-          );
-        }
-      } catch {
-        // fallback defaultRooms
-      } finally {
-        if (!cancelled) setRoomsLoaded(true);
+      const resp = await roomService.getRooms({ status: 'active', pageSize: 100 });
+      if (cancelled) return;
+      if (resp.ok && resp.data && resp.data.items.length > 0) {
+        setRooms(
+          resp.data.items.map((r: MeetingRoom) => ({ id: r.id, name: r.name })),
+        );
       }
+      if (!cancelled) setRoomsLoaded(true);
     })();
     return () => {
       cancelled = true;
@@ -437,133 +434,104 @@ export default function Statistics() {
 
   const loadUsageData = useCallback(async () => {
     setLoading((prev) => ({ ...prev, usage: true }));
-    try {
-      const { startDate, endDate } = getTimeRangeDates(timeRange);
+    const { startDate, endDate } = getTimeRangeDates(timeRange);
 
-      const results = await Promise.allSettled([
-        statisticsService.getDailyReport(briefDate),
-        statisticsService.getRoomUsageRanking(startDate, endDate, 10),
-      ]);
+    const results = await Promise.allSettled([
+      statisticsService.getDailyReport(briefDate),
+      statisticsService.getRoomUsageRanking(startDate, endDate, 10),
+    ]);
 
-      const [dailyResult, usageResult] = results;
-      const dailyReport =
-        dailyResult.status === 'fulfilled' ? dailyResult.value : undefined;
-      const usageList: RoomUsageStats[] =
-        usageResult.status === 'fulfilled' && usageResult.value
-          ? usageResult.value
-          : [];
+    const [dailyResult, usageResult] = results;
+    const dailyReport =
+      dailyResult.status === 'fulfilled' && dailyResult.value.ok
+        ? dailyResult.value.data
+        : undefined;
+    const usageList: RoomUsageStats[] =
+      usageResult.status === 'fulfilled' && usageResult.value.ok && usageResult.value.data
+        ? usageResult.value.data
+        : [];
 
-      const heatmap =
-        buildHeatmapFromReport(dailyReport, rooms) ||
-        buildHeatmapFromRoomUsage(usageList, rooms) ||
-        generateHeatmapDataMock(rooms);
-      setHeatmapData(heatmap);
+    const heatmap =
+      buildHeatmapFromReport(dailyReport, rooms) ||
+      buildHeatmapFromRoomUsage(usageList, rooms) ||
+      generateHeatmapDataMock(rooms);
+    setHeatmapData(heatmap);
 
-      const bar = buildBarDataFromUsage(usageList) || generateBarDataMock(rooms);
-      setBarData(bar);
-    } catch {
-      setHeatmapData(generateHeatmapDataMock(rooms));
-      setBarData(generateBarDataMock(rooms));
-    } finally {
-      setLoading((prev) => ({ ...prev, usage: false }));
-    }
+    const bar = buildBarDataFromUsage(usageList) || generateBarDataMock(rooms);
+    setBarData(bar);
+    setLoading((prev) => ({ ...prev, usage: false }));
   }, [timeRange, briefDate, rooms]);
 
   const loadTimeoutData = useCallback(async () => {
     setLoading((prev) => ({ ...prev, timeout: true }));
-    try {
-      const results = await Promise.allSettled([
-        statisticsService.getTimeoutTrend(30),
-        statisticsService.getTimeoutByDepartment(),
-        statisticsService.getTopTimeoutRooms(10),
-      ]);
+    const [trendResult, deptResult, roomsResult] = await Promise.all([
+      statisticsService.getTimeoutTrend(30),
+      statisticsService.getTimeoutByDepartment(),
+      statisticsService.getTopTimeoutRooms(10),
+    ]);
 
-      const trendResult: ApiTimeoutTrendItem[] =
-        results[0].status === 'fulfilled' && results[0].value ? results[0].value : [];
-      const deptResult: DepartmentTimeoutItem[] =
-        results[1].status === 'fulfilled' && results[1].value ? results[1].value : [];
-      const roomsResult: RoomTimeoutItem[] =
-        results[2].status === 'fulfilled' && results[2].value ? results[2].value : [];
+    const trendData = trendResult.ok && trendResult.data ? trendResult.data : [];
+    const mappedTrend: TimeoutTrendItem[] =
+      trendData.map((t) => {
+        const d = new Date(t.date);
+        return { date: `${d.getMonth() + 1}/${d.getDate()}`, count: t.count };
+      });
+    setTimeoutTrendData(mappedTrend);
 
-      const mappedTrend: TimeoutTrendItem[] =
-        trendResult.length > 0
-          ? trendResult.map((t) => {
-              const d = new Date(t.date);
-              return { date: `${d.getMonth() + 1}/${d.getDate()}`, count: t.count };
-            })
-          : generateTimeoutTrendDataMock();
-      setTimeoutTrendData(mappedTrend);
+    const deptData = deptResult.ok && deptResult.data ? deptResult.data : [];
+    const mappedDept: DepartmentItem[] =
+      deptData.map((d) => ({ name: d.department, count: d.count }));
+    setDepartmentData(mappedDept);
 
-      const mappedDept: DepartmentItem[] =
-        deptResult.length > 0
-          ? deptResult.map((d) => ({ name: d.department, count: d.count }))
-          : generateDepartmentDataMock();
-      setDepartmentData(mappedDept);
-
-      if (roomsResult.length > 0) {
-        const mappedRooms: TopTimeoutRoom[] = roomsResult
-          .sort((a, b) => b.timeoutCount - a.timeoutCount)
-          .slice(0, 10)
-          .map((r, i) => ({
-            rank: i + 1,
-            name: r.roomName,
-            count: r.timeoutCount,
-            avgDuration:
-              r.totalBookings > 0 ? Math.round((r.timeoutCount / r.totalBookings) * 20 * 10) / 10 : 0,
-          }));
-        setTopTimeoutRooms(mappedRooms);
-      } else {
-        setTopTimeoutRooms(generateTopTimeoutRoomsMock(rooms));
-      }
-    } catch {
-      setTimeoutTrendData(generateTimeoutTrendDataMock());
-      setDepartmentData(generateDepartmentDataMock());
-      setTopTimeoutRooms(generateTopTimeoutRoomsMock(rooms));
-    } finally {
-      setLoading((prev) => ({ ...prev, timeout: false }));
-    }
+    const roomsData = roomsResult.ok && roomsResult.data ? roomsResult.data : [];
+    const mappedRooms: TopTimeoutRoom[] = roomsData
+      .sort((a, b) => b.timeoutCount - a.timeoutCount)
+      .slice(0, 10)
+      .map((r, i) => ({
+        rank: i + 1,
+        name: r.roomName,
+        count: r.timeoutCount,
+        avgDuration:
+          r.totalBookings > 0 ? Math.round((r.timeoutCount / r.totalBookings) * 20 * 10) / 10 : 0,
+      }));
+    setTopTimeoutRooms(mappedRooms);
+    setLoading((prev) => ({ ...prev, timeout: false }));
   }, [rooms]);
 
   const loadFaultData = useCallback(async () => {
     setLoading((prev) => ({ ...prev, fault: true }));
-    try {
-      const { startDate, endDate } = getTimeRangeDates(timeRange);
-      const result = await Promise.allSettled([
-        statisticsService.getDeviceFaultRanking(startDate, endDate, 20),
-      ]);
-      const faults: DeviceFaultStats[] =
-        result[0].status === 'fulfilled' && result[0].value ? result[0].value : [];
+    const { startDate, endDate } = getTimeRangeDates(timeRange);
+    const result = await Promise.allSettled([
+      statisticsService.getDeviceFaultRanking(startDate, endDate, 20),
+    ]);
+    const faults: DeviceFaultStats[] =
+      result[0].status === 'fulfilled' && result[0].value.ok && result[0].value.data
+        ? result[0].value.data
+        : [];
 
-      const pie = buildFaultPieData(faults) || generateFaultPieDataMock();
-      setFaultPieData(pie);
+    const pie = buildFaultPieData(faults) || generateFaultPieDataMock();
+    setFaultPieData(pie);
 
-      const rank = buildFaultRankData(faults) || generateFaultRankDataMock();
-      setFaultRankData(rank);
-    } catch {
-      setFaultPieData(generateFaultPieDataMock());
-      setFaultRankData(generateFaultRankDataMock());
-    } finally {
-      setLoading((prev) => ({ ...prev, fault: false }));
-    }
+    const rank = buildFaultRankData(faults) || generateFaultRankDataMock();
+    setFaultRankData(rank);
+    setLoading((prev) => ({ ...prev, fault: false }));
   }, [timeRange]);
 
   const loadBriefData = useCallback(async () => {
     setLoading((prev) => ({ ...prev, brief: true }));
-    try {
-      const results = await Promise.allSettled([
-        statisticsService.getDailyReport(briefDate),
-      ]);
-      const report =
-        results[0].status === 'fulfilled' ? results[0].value : undefined;
-      const brief = buildBriefData(report, briefDate) || generateBriefDataMock(briefDate);
-      setBriefData(brief);
-      setHistoryBriefs(generateHistoryBriefsMock(briefDate));
-    } catch {
-      setBriefData(generateBriefDataMock(briefDate));
-      setHistoryBriefs(generateHistoryBriefsMock(briefDate));
-    } finally {
-      setLoading((prev) => ({ ...prev, brief: false }));
-    }
+    const reportResp = await statisticsService.getDailyReport(briefDate);
+    const report = reportResp.ok && reportResp.data ? reportResp.data : undefined;
+    const brief = buildBriefData(report, briefDate) || {
+      date: briefDate,
+      totalBookings: 0,
+      completionRate: 0,
+      avgUsageRate: 0,
+      timeoutCount: 0,
+      faultCount: 0,
+    };
+    setBriefData(brief);
+    setHistoryBriefs(generateHistoryBriefsMock(briefDate));
+    setLoading((prev) => ({ ...prev, brief: false }));
   }, [briefDate]);
 
   useEffect(() => {
@@ -574,7 +542,7 @@ export default function Statistics() {
   useEffect(() => {
     if (!roomsLoaded) return;
     if (activeTab === 'timeout') loadTimeoutData();
-  }, [activeTab, roomsLoaded, loadTimeoutData]);
+  }, [activeTab, timeoutVersion, roomsLoaded, loadTimeoutData]);
 
   useEffect(() => {
     if (!roomsLoaded) return;
@@ -584,7 +552,12 @@ export default function Statistics() {
   useEffect(() => {
     if (!roomsLoaded) return;
     if (activeTab === 'brief') loadBriefData();
-  }, [activeTab, briefDate, roomsLoaded, loadBriefData]);
+  }, [activeTab, briefDate, briefVersion, roomsLoaded, loadBriefData]);
+
+  useEffect(() => {
+    setTimeoutVersion((v) => v + 1);
+    setBriefVersion((v) => v + 1);
+  }, []);
 
   const handlePushBrief = () => {
     addToast({ type: 'success', message: '已推送到管理员手机' });
@@ -850,6 +823,16 @@ export default function Statistics() {
       {activeTab === 'timeout' && (
         <div className="space-y-6 relative">
           {LoadingOverlay}
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              variant="secondary"
+              leftIcon={<RefreshCw className="h-4 w-4" />}
+              onClick={() => setTimeoutVersion((v) => v + 1)}
+            >
+              刷新数据
+            </Button>
+          </div>
           <Card>
             <CardHeader>
               <CardTitle>超时释放趋势（近30天）</CardTitle>
@@ -1170,7 +1153,7 @@ export default function Statistics() {
                 <Button
                   leftIcon={<RefreshCw className="h-4 w-4" />}
                   variant="secondary"
-                  onClick={() => loadBriefData()}
+                  onClick={() => setBriefVersion((v) => v + 1)}
                 >
                   刷新数据
                 </Button>
