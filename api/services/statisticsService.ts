@@ -245,6 +245,95 @@ class StatisticsService {
     };
   }
 
+  getDeviceFaultRanking(params: StatisticsQueryParams = {}) {
+    const today = new Date();
+    const {
+      startDate = this.getStartOfDay(today, -30).toISOString(),
+      endDate = this.getEndOfDay(today).toISOString(),
+      limit = 10,
+    } = params;
+
+    const workOrders = workOrderRepository.findBetweenDates(startDate, endDate);
+    const deviceMap = new Map<string, {
+      deviceId: string;
+      deviceName: string;
+      faultCount: number;
+      totalRepairHours: number;
+      repairCount: number;
+    }>();
+
+    const devices = deviceRepository.findAll();
+
+    workOrders.forEach((wo) => {
+      const device = devices.find((d) => d.id === wo.deviceId);
+      if (!device) return;
+      const existing = deviceMap.get(wo.deviceId) || {
+        deviceId: wo.deviceId,
+        deviceName: device.name,
+        faultCount: 0,
+        totalRepairHours: 0,
+        repairCount: 0,
+      };
+      existing.faultCount++;
+      if (wo.status === 'completed' && wo.completedAt) {
+        const hours =
+          (new Date(wo.completedAt).getTime() - new Date(wo.createdAt).getTime()) / 3600000;
+        existing.totalRepairHours += hours;
+        existing.repairCount++;
+      }
+      deviceMap.set(wo.deviceId, existing);
+    });
+
+    const result = Array.from(deviceMap.values())
+      .map((item) => {
+        const device = devices.find((d) => d.id === item.deviceId);
+        return {
+          deviceId: item.deviceId,
+          deviceName: item.deviceName,
+          deviceType: device?.type || 'other',
+          faultCount: item.faultCount,
+          avgRepairTime: item.repairCount > 0
+            ? Math.round((item.totalRepairHours / item.repairCount) * 10) / 10
+            : 0,
+        };
+      })
+      .sort((a, b) => b.faultCount - a.faultCount)
+      .slice(0, typeof limit === 'number' ? limit : parseInt(limit as string, 10));
+
+    return result;
+  }
+
+  getTimeSlotDistribution(params: StatisticsQueryParams = {}) {
+    const today = new Date();
+    const {
+      startDate = this.getStartOfDay(today, -30).toISOString(),
+      endDate = this.getEndOfDay(today).toISOString(),
+    } = params;
+
+    const bookings = bookingRepository.findBetweenDates(startDate, endDate)
+      .filter((b) => ['completed', 'locked'].includes(b.status));
+
+    const hours = Array.from({ length: 12 }, (_, i) => i + 8);
+    const totalDays = Math.max(
+      1,
+      Math.ceil(
+        (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24),
+      ),
+    );
+    const rooms = roomRepository.count();
+
+    return hours.map((hour) => {
+      const count = bookings.filter((b) => {
+        const startHour = new Date(b.startTime).getHours();
+        const endHour = new Date(b.endTime).getHours();
+        return hour >= startHour && hour < endHour;
+      }).length;
+      const maxPossible = totalDays * rooms;
+      const rate = maxPossible > 0 ? Math.round((count / maxPossible) * 100) : 0;
+      return { hour, count, rate };
+    });
+  }
+
   private buildRoomUsageHeatmap(
     bookings: Array<{ startTime: string; endTime: string; roomId: string; status: string }>,
     rooms: Array<{ id: string }>,

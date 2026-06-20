@@ -199,6 +199,24 @@ class BookingRepository extends BaseRepository<Booking> {
     const sql = 'DELETE FROM booking_devices WHERE bookingId = ?';
     this.db.prepare(sql).run(bookingId);
   }
+
+  findDeviceConflicts(deviceIds: string[], startTime: string, endTime: string, excludeBookingId?: string): Array<{ bookingId: string; deviceId: string }> {
+    const placeholders = deviceIds.map(() => '?').join(',');
+    const params: unknown[] = [...deviceIds, startTime, endTime];
+    let sql = `
+      SELECT bd.bookingId, bd.deviceId
+      FROM booking_devices bd
+      JOIN bookings b ON bd.bookingId = b.id
+      WHERE bd.deviceId IN (${placeholders})
+        AND b.status IN ('locked', 'pending_approval')
+        AND NOT (b.endTime <= ? OR b.startTime >= ?)
+    `;
+    if (excludeBookingId) {
+      sql += ' AND bd.bookingId != ?';
+      params.push(excludeBookingId);
+    }
+    return this.db.prepare(sql).all(...params) as Array<{ bookingId: string; deviceId: string }>;
+  }
 }
 
 export const bookingRepository = new BookingRepository();

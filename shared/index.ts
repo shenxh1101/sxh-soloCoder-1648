@@ -1,3 +1,5 @@
+export const MIN_CREDIT_SCORE = 60;
+
 export type UserRole = 'employee' | 'manager' | 'admin';
 
 export interface User {

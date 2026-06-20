@@ -98,4 +98,32 @@ router.get('/credit-stats', async (req: AuthenticatedRequest, res: Response): Pr
   }
 });
 
+router.get('/device-faults', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { startDate, endDate, limit } = req.query;
+    const parsedLimit = limit !== undefined ? Number(limit) : undefined;
+    const result = statisticsService.getDeviceFaultRanking({
+      startDate: startDate as string | undefined,
+      endDate: endDate as string | undefined,
+      limit: !Number.isNaN(parsedLimit) ? parsedLimit : undefined,
+    });
+    res.json({ code: 200, message: '获取成功', data: result } as ApiResponse<typeof result>);
+  } catch (error) {
+    res.status(500).json({ code: 500, message: '服务器错误', data: null } as ApiResponse<null>);
+  }
+});
+
+router.get('/time-slots', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { startDate, endDate } = req.query;
+    const result = statisticsService.getTimeSlotDistribution({
+      startDate: startDate as string | undefined,
+      endDate: endDate as string | undefined,
+    });
+    res.json({ code: 200, message: '获取成功', data: result } as ApiResponse<typeof result>);
+  } catch (error) {
+    res.status(500).json({ code: 500, message: '服务器错误', data: null } as ApiResponse<null>);
+  }
+});
+
 export default router;

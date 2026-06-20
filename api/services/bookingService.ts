@@ -4,6 +4,7 @@ import { deviceRepository } from '../repository/deviceRepository.js';
 import { userRepository } from '../repository/userRepository.js';
 import { notificationService } from './notificationService.js';
 import { creditService } from './creditService.js';
+import { MIN_CREDIT_SCORE } from '../../shared/index.js';
 import type {
   Booking,
   BookingStatus,
@@ -114,8 +115,14 @@ class BookingService {
     };
   }
 
-  create(input: CreateBookingInput): BookingWithRelations | { conflicts: BookingConflict[] } {
-    const conflicts = this.detectConflicts(input.roomId, input.startTime, input.endTime);
+  create(input: CreateBookingInput): BookingWithRelations | { conflicts: BookingConflict[] } | { error: string } {
+    const user = userRepository.findById(input.userId);
+    if (user && user.creditScore < MIN_CREDIT_SCORE) {
+      return { error: '信用分不足，禁止预订' };
+    }
+
+    const deviceIds = input.requiredDeviceIds || [];
+    const conflicts = this.detectConflicts(input.roomId, input.startTime, input.endTime, undefined, deviceIds);
     if (conflicts.length > 0) {
       return { conflicts };
     }
@@ -129,13 +136,9 @@ class BookingService {
       return { conflicts: [{ type: 'time', suggestedAlternatives: [] }] };
     }
 
-    const now = new Date();
-    const startDate = new Date(input.startTime);
-    const needsApproval =
-      input.attendeeCount > 10 ||
-      (startDate.getTime() - now.getTime()) < 3600000;
+    const durationHours = (new Date(input.endTime).getTime() - new Date(input.startTime).getTime()) / 3600000;
+    const needsApproval = durationHours > 2;
 
-    const deviceIds = input.requiredDeviceIds || [];
     deviceIds.forEach((did) => {
       const device = deviceRepository.findById(did);
       if (device && device.status === 'faulty') {
@@ -170,7 +173,8 @@ class BookingService {
     if (!booking) return null;
 
     if (input.roomId && input.startTime && input.endTime) {
-      const conflicts = this.detectConflicts(input.roomId, input.startTime, input.endTime, id);
+      const deviceIds = input.requiredDeviceIds || booking.requiredDeviceIds || [];
+      const conflicts = this.detectConflicts(input.roomId, input.startTime, input.endTime, id, deviceIds);
       if (conflicts.length > 0) return null;
     }
 
@@ -188,7 +192,7 @@ class BookingService {
     return bookingRepository.delete(id);
   }
 
-  detectConflicts(roomId: string, startTime: string, endTime: string, excludeBookingId?: string): BookingConflict[] {
+  detectConflicts(roomId: string, startTime: string, endTime: string, excludeBookingId?: string, deviceIds?: string[]): BookingConflict[] {
     const conflicts: BookingConflict[] = [];
     const timeConflicts = bookingRepository.findConflicts(roomId, startTime, endTime, excludeBookingId);
 
@@ -204,6 +208,27 @@ class BookingService {
         });
       });
     }
+
+    if (deviceIds && deviceIds.length > 0) {
+      const deviceConflicts = this.detectDeviceConflicts(deviceIds, startTime, endTime, excludeBookingId);
+      conflicts.push(...deviceConflicts);
+    }
+
+    return conflicts;
+  }
+
+  detectDeviceConflicts(deviceIds: string[], startTime: string, endTime: string, excludeBookingId?: string): BookingConflict[] {
+    const conflicts: BookingConflict[] = [];
+    const deviceConflicts = bookingRepository.findDeviceConflicts(deviceIds, startTime, endTime, excludeBookingId);
+
+    deviceConflicts.forEach((dc) => {
+      const device = deviceRepository.findById(dc.deviceId);
+      conflicts.push({
+        type: 'device',
+        deviceName: device?.name || dc.deviceId,
+        conflictingBookingId: dc.bookingId,
+      });
+    });
 
     return conflicts;
   }

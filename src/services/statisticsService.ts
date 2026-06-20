@@ -24,6 +24,7 @@ export interface RoomUsageStats {
 export interface DeviceFaultStats {
   deviceId: string;
   deviceName: string;
+  deviceType: string;
   faultCount: number;
   avgRepairTime: number;
 }

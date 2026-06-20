@@ -167,6 +167,7 @@ export interface StatisticsQueryParams {
   startDate?: string;
   endDate?: string;
   roomId?: string;
+  limit?: number | string;
 }
 
 export type {

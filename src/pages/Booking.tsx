@@ -44,6 +44,8 @@ import {
   cn,
 } from '../utils';
 
+const MIN_CREDIT_SCORE = 60;
+
 const DEVICE_OPTIONS = [
   { value: 'projector', label: '投影仪', icon: Projector },
   { value: 'whiteboard', label: '白板', icon: PenTool },
@@ -231,6 +233,7 @@ export default function Booking() {
           roomId: formData.room.id,
           startTime: formData.startTime.toISOString(),
           endTime: formData.endTime.toISOString(),
+          requiredDeviceIds: formData.requiredDevices,
         });
         setConflicts(result || []);
       } catch {
@@ -253,7 +256,7 @@ export default function Booking() {
     };
     const timer = setTimeout(checkConflicts, 300);
     return () => clearTimeout(timer);
-  }, [formData.room, formData.startTime, formData.endTime, roomBookings]);
+  }, [formData.room, formData.startTime, formData.endTime, formData.requiredDevices, roomBookings]);
 
   const toggleDeviceFilter = (device: string) => {
     setDeviceFilter((prev) =>
@@ -262,6 +265,10 @@ export default function Booking() {
   };
 
   const handleTimeSlotClick = (roomId: string, date: Date, slotIdx: number) => {
+    if (user && user.creditScore < MIN_CREDIT_SCORE) {
+      addToast({ type: 'warning', message: '您的信用分不足，暂不可预订' });
+      return;
+    }
     const room = rooms.find((r) => r.id === roomId);
     if (!room || room.status !== 'active') {
       addToast({ type: 'warning', message: '该会议室当前不可用' });
@@ -303,7 +310,17 @@ export default function Booking() {
   const validateStep2 = (): boolean => {
     const errors: Record<string, string> = {};
     if (!formData.title.trim()) errors.title = '请输入会议主题';
-    if (conflicts.length > 0) errors.conflict = '存在时间冲突，请调整时间';
+    if (conflicts.length > 0) {
+      const hasTimeConflict = conflicts.some((c) => c.type === 'time');
+      const hasDeviceConflict = conflicts.some((c) => c.type === 'device');
+      if (hasTimeConflict && hasDeviceConflict) {
+        errors.conflict = '存在时间和设备冲突，请调整时间或设备';
+      } else if (hasDeviceConflict) {
+        errors.conflict = '存在设备冲突，请调整设备或时间';
+      } else {
+        errors.conflict = '存在时间冲突，请调整时间';
+      }
+    }
     setFormErrors({ ...formErrors, ...errors });
     return Object.keys(errors).length === 0;
   };
@@ -330,8 +347,7 @@ export default function Booking() {
         attendeeCount: formData.attendeeCount,
         requiredDeviceIds: formData.requiredDevices,
       });
-      const duration = getDurationHours(formData.startTime!, formData.endTime!);
-      if (duration > 2) {
+      if (result?.status === 'pending_approval') {
         addToast({
           type: 'warning',
           message: '预订已提交审批，等待经理审核后生效',
@@ -341,9 +357,8 @@ export default function Booking() {
         addToast({ type: 'success', message: '预订成功！' });
       }
       setBookingModalOpen(false);
-      setRoomBookings(generateMockBookings(rooms, weekDates));
-      if (duration <= 2 && result?.id) {
-        setTimeout(() => navigate(`/bookings/${result.id}`), 800);
+      if (result?.id) {
+        navigate(`/bookings/${result.id}`);
       }
     } catch {
       const duration = getDurationHours(formData.startTime!, formData.endTime!);
@@ -406,6 +421,9 @@ export default function Booking() {
     formData.startTime && formData.endTime
       ? getDurationHours(formData.startTime, formData.endTime)
       : 0;
+
+  const isCreditInsufficient =
+    user?.creditScore !== undefined && user.creditScore < MIN_CREDIT_SCORE;
 
   const getDeviceIcon = (deviceId: string) => {
     const found = DEVICE_OPTIONS.find((d) => d.value === deviceId);
@@ -620,7 +638,7 @@ export default function Booking() {
               </div>
             </div>
           </CardHeader>
-          <CardContent padding="none">
+          <CardContent className="p-0">
             {!selectedRoom ? (
               <div className="py-16 text-center text-brand-400">
                 <CalendarDays className="w-16 h-16 mx-auto mb-4 opacity-30" />
@@ -777,11 +795,21 @@ export default function Booking() {
                 取消
               </Button>
               {bookingStep === 1 ? (
-                <Button onClick={handleNextStep} rightIcon={<ArrowRight className="w-4 h-4" />}>
+                <Button
+                  onClick={handleNextStep}
+                  rightIcon={<ArrowRight className="w-4 h-4" />}
+                  disabled={isCreditInsufficient}
+                  title={isCreditInsufficient ? '您的信用分不足，暂不可预订' : undefined}
+                >
                   下一步
                 </Button>
               ) : (
-                <Button onClick={handleSubmit} rightIcon={duration > 2 ? <FileCheck className="w-4 h-4" /> : <Check className="w-4 h-4" />}>
+                <Button
+                  onClick={handleSubmit}
+                  rightIcon={duration > 2 ? <FileCheck className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+                  disabled={isCreditInsufficient}
+                  title={isCreditInsufficient ? '您的信用分不足，暂不可预订' : undefined}
+                >
                   {duration > 2 ? '提交审批' : '确认预订'}
                 </Button>
               )}
@@ -1017,11 +1045,36 @@ export default function Booking() {
                   <div className="rounded-xl border border-danger-200 bg-danger-50 p-3">
                     <div className="flex items-start gap-2">
                       <AlertTriangle className="w-5 h-5 text-danger-500 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium text-danger-700">存在时间冲突</p>
-                        <p className="text-xs text-danger-600 mt-1">
-                          所选时段已有预约，请调整时间
-                        </p>
+                      <div className="space-y-2">
+                        {conflicts.some((c) => c.type === 'time') && (
+                          <div>
+                            <p className="text-sm font-medium text-danger-700">存在时间冲突</p>
+                            <p className="text-xs text-danger-600 mt-0.5">
+                              所选时段已有预约，请调整时间
+                            </p>
+                          </div>
+                        )}
+                        {conflicts
+                          .filter((c) => c.type === 'device')
+                          .map((c, idx) => {
+                            const deviceLabel = DEVICE_OPTIONS.find(
+                              (d) => d.value === c.deviceName,
+                            )?.label;
+                            return (
+                              <div key={`device-${idx}`}>
+                                <p className="text-sm font-medium text-danger-700">
+                                  存在设备冲突
+                                </p>
+                                <p className="text-xs text-danger-600 mt-0.5">
+                                  设备
+                                  <span className="font-medium">
+                                    {deviceLabel || c.deviceName || '未知设备'}
+                                  </span>
+                                  已被占用，请调整时间或更换设备
+                                </p>
+                              </div>
+                            );
+                          })}
                       </div>
                     </div>
                   </div>

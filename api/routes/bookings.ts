@@ -65,10 +65,18 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
     }
 
     const result = bookingService.create(input);
+    if ('error' in result) {
+      res.status(403).json({
+        code: 403,
+        message: result.error,
+        data: null,
+      } as ApiResponse<null>);
+      return;
+    }
     if ('conflicts' in result) {
       res.status(409).json({
         code: 409,
-        message: '存在时间冲突',
+        message: '存在冲突',
         data: { conflicts: result.conflicts as BookingConflict[] },
       } as ApiResponse<{ conflicts: BookingConflict[] }>);
       return;
@@ -156,8 +164,8 @@ router.post('/:id/release', async (req: AuthenticatedRequest, res: Response): Pr
 
 router.post('/conflicts', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { roomId, startTime, endTime } = req.body;
-    const conflicts = bookingService.detectConflicts(roomId, startTime, endTime);
+    const { roomId, startTime, endTime, requiredDeviceIds } = req.body;
+    const conflicts = bookingService.detectConflicts(roomId, startTime, endTime, undefined, requiredDeviceIds);
     res.json({
       code: 200,
       message: '检测完成',
